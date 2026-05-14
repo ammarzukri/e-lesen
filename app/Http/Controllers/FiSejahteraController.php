@@ -10,6 +10,7 @@ use App\Models\License;
 use App\Models\LicenseApplication;
 use App\Models\TaxSubmission;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,6 +22,156 @@ use Inertia\Inertia;
 
 class FiSejahteraController extends Controller
 {
+    protected function resolveGuestHotelsForUser(User $user): array
+    {
+        $hotels = collect();
+        $canSelectHotel = false;
+        $allowedHotelIds = collect();
+        $selectableHotelIds = collect();
+
+        if ($user->role === 'user') {
+            $hotels = Hotel::where('user_id', $user->id)
+                ->with('license:id,hotel_id,status,expiry_date')
+                ->orderBy('name')
+                ->get(['id', 'name']);
+
+            $allowedHotelIds = $hotels->pluck('id');
+            $selectableHotelIds = $hotels
+                ->filter(fn (Hotel $hotel) => ! $this->isHotelLicenseExpired($hotel))
+                ->pluck('id');
+            $canSelectHotel = true;
+        } elseif ($this->isBktAdmin($user)) {
+            $hotels = Hotel::with('license:id,hotel_id,status,expiry_date')
+                ->orderBy('name')
+                ->get(['id', 'name']);
+
+            $allowedHotelIds = $hotels->pluck('id');
+            $selectableHotelIds = $allowedHotelIds;
+            $canSelectHotel = true;
+        } elseif ($this->isPbtAdmin($user)) {
+            $this->ensurePbtAdminHasPbt($user);
+
+            $hotels = Hotel::where('pbt_name', $this->pbtAdminName($user))
+                ->with('license:id,hotel_id,status,expiry_date')
+                ->orderBy('name')
+                ->get(['id', 'name']);
+
+            $allowedHotelIds = $hotels->pluck('id');
+            $selectableHotelIds = $allowedHotelIds;
+            $canSelectHotel = true;
+        } elseif ($user->role === 'staff') {
+            $staffHotel = HotelStaff::with('hotel:id,name')
+                ->where('user_id', $user->id)
+                ->first()?->hotel;
+
+            if ($staffHotel) {
+                $hotels = collect([$staffHotel]);
+                $allowedHotelIds = collect([$staffHotel->id]);
+                $selectableHotelIds = $allowedHotelIds;
+            }
+        }
+
+        return [
+            'hotels' => $hotels,
+            'canSelectHotel' => $canSelectHotel,
+            'allowedHotelIds' => $allowedHotelIds,
+            'selectableHotelIds' => $selectableHotelIds,
+        ];
+    }
+
+    protected function parseGuestDate(?string $value): ?string
+    {
+        $dateValue = trim((string) $value);
+
+        if ($dateValue === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::createFromFormat('Y-m-d', $dateValue)->toDateString();
+        } catch (\Throwable $exception) {
+            return null;
+        }
+    }
+
+    protected function guestFiltersFromRequest(Request $request, bool $useDefaultRange): array
+    {
+        $search = trim((string) $request->query('search', ''));
+        $selectedHotelId = trim((string) $request->query('hotel_id', ''));
+
+        $defaultStartDate = now()->startOfMonth()->toDateString();
+        $defaultEndDate = now()->endOfMonth()->toDateString();
+
+        $startDate = $this->parseGuestDate($request->query('start_date')) ?? '';
+        $endDate = $this->parseGuestDate($request->query('end_date')) ?? '';
+        $hasDateInput = $request->has('start_date') || $request->has('end_date');
+
+        if ($useDefaultRange && ! $hasDateInput) {
+            $startDate = $defaultStartDate;
+            $endDate = $defaultEndDate;
+        }
+
+        if ($startDate !== '' && $endDate !== '' && Carbon::parse($startDate)->gt(Carbon::parse($endDate))) {
+            [$startDate, $endDate] = [$endDate, $startDate];
+        }
+
+        return [
+            'search' => $search,
+            'hotel_id' => $selectedHotelId,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+    }
+
+    protected function buildGuestQuery(array $filters, $allowedHotelIds, $selectableHotelIds): array
+    {
+        $selectedHotelId = (string) ($filters['hotel_id'] ?? '');
+        $search = (string) ($filters['search'] ?? '');
+        $startDate = (string) ($filters['start_date'] ?? '');
+        $endDate = (string) ($filters['end_date'] ?? '');
+
+        $query = Booking::with([
+            'guest:id,name,nationality,identity_number,email,phone_number',
+            'hotel:id,name',
+        ]);
+
+        if ($allowedHotelIds->isNotEmpty()) {
+            $query->whereIn('hotel_id', $allowedHotelIds);
+        } else {
+            $query->whereRaw('1 = 0');
+        }
+
+        if ($selectedHotelId !== '' && ctype_digit($selectedHotelId)) {
+            $selectedHotelIdInt = (int) $selectedHotelId;
+
+            if ($selectableHotelIds->contains($selectedHotelIdInt)) {
+                $query->where('hotel_id', $selectedHotelIdInt);
+            } else {
+                $selectedHotelId = '';
+            }
+        }
+
+        if ($search !== '') {
+            $query->whereHas('guest', function ($guestQuery) use ($search) {
+                $guestQuery
+                    ->where('name', 'like', '%'.$search.'%')
+                    ->orWhere('identity_number', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%')
+                    ->orWhere('phone_number', 'like', '%'.$search.'%');
+            });
+        }
+
+        if ($startDate !== '') {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+
+        if ($endDate !== '') {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+
+        return [$query, $selectedHotelId];
+    }
+
     protected function enforceFiSejahteraAccess(): ?RedirectResponse
     {
         $this->syncExpiredLicenseStatuses();
@@ -524,87 +675,17 @@ class FiSejahteraController extends Controller
 
         abort_unless($user, 403);
 
-        $search = trim((string) $request->query('search', ''));
-        $selectedHotelId = (string) $request->query('hotel_id', '');
+        $filters = $this->guestFiltersFromRequest($request, true);
 
-        $hotels = collect();
-        $canSelectHotel = false;
-        $allowedHotelIds = collect();
-        $selectableHotelIds = collect();
+        $guestHotelData = $this->resolveGuestHotelsForUser($user);
+        $hotels = $guestHotelData['hotels'];
+        $canSelectHotel = $guestHotelData['canSelectHotel'];
+        $allowedHotelIds = $guestHotelData['allowedHotelIds'];
+        $selectableHotelIds = $guestHotelData['selectableHotelIds'];
 
-        if ($user->role === 'user') {
-            $hotels = Hotel::where('user_id', $user->id)
-                ->with('license:id,hotel_id,status,expiry_date')
-                ->orderBy('name')
-                ->get(['id', 'name']);
-
-            $allowedHotelIds = $hotels->pluck('id');
-            $selectableHotelIds = $hotels
-                ->filter(fn (Hotel $hotel) => ! $this->isHotelLicenseExpired($hotel))
-                ->pluck('id');
-            $canSelectHotel = true;
-        } elseif ($this->isBktAdmin($user)) {
-            $hotels = Hotel::with('license:id,hotel_id,status,expiry_date')
-                ->orderBy('name')
-                ->get(['id', 'name']);
-            $allowedHotelIds = $hotels->pluck('id');
-            $selectableHotelIds = $allowedHotelIds;
-            $canSelectHotel = true;
-        } elseif ($this->isPbtAdmin($user)) {
-            $this->ensurePbtAdminHasPbt($user);
-
-            $hotels = Hotel::where('pbt_name', $this->pbtAdminName($user))
-                ->with('license:id,hotel_id,status,expiry_date')
-                ->orderBy('name')
-                ->get(['id', 'name']);
-
-            $allowedHotelIds = $hotels->pluck('id');
-            $selectableHotelIds = $allowedHotelIds;
-            $canSelectHotel = true;
-        } elseif ($user->role === 'staff') {
-            $staffHotel = HotelStaff::with('hotel:id,name')
-                ->where('user_id', $user->id)
-                ->first()?->hotel;
-
-            if ($staffHotel) {
-                $hotels = collect([$staffHotel]);
-                $allowedHotelIds = collect([$staffHotel->id]);
-                $selectableHotelIds = $allowedHotelIds;
-            }
-        }
-
-        $query = Booking::with([
-            'guest:id,name,nationality,identity_number,email,phone_number',
-            'hotel:id,name',
-        ]);
+        [$query, $selectedHotelId] = $this->buildGuestQuery($filters, $allowedHotelIds, $selectableHotelIds);
 
         $hasHotel = $allowedHotelIds->isNotEmpty();
-
-        if ($allowedHotelIds->isNotEmpty()) {
-            $query->whereIn('hotel_id', $allowedHotelIds);
-        } else {
-            $query->whereRaw('1 = 0');
-        }
-
-        if ($selectedHotelId !== '' && ctype_digit($selectedHotelId)) {
-            $selectedHotelIdInt = (int) $selectedHotelId;
-
-            if ($selectableHotelIds->contains($selectedHotelIdInt)) {
-                $query->where('hotel_id', $selectedHotelIdInt);
-            } else {
-                $selectedHotelId = '';
-            }
-        }
-
-        if ($search !== '') {
-            $query->whereHas('guest', function ($guestQuery) use ($search) {
-                $guestQuery
-                    ->where('name', 'like', '%'.$search.'%')
-                    ->orWhere('identity_number', 'like', '%'.$search.'%')
-                    ->orWhere('email', 'like', '%'.$search.'%')
-                    ->orWhere('phone_number', 'like', '%'.$search.'%');
-            });
-        }
 
         $guests = $query->latest('id')
             ->get()
@@ -633,10 +714,61 @@ class FiSejahteraController extends Controller
             'hasHotel' => $hasHotel,
             'canSelectHotel' => $canSelectHotel,
             'filters' => [
-                'search' => $search,
+                'search' => $filters['search'],
                 'hotel_id' => $selectedHotelId,
+                'start_date' => $filters['start_date'],
+                'end_date' => $filters['end_date'],
             ],
         ]);
+    }
+
+    public function guestExportPdf(Request $request)
+    {
+        if ($redirect = $this->enforceFiSejahteraAccess()) {
+            return $redirect;
+        }
+
+        $user = auth()->user();
+
+        abort_unless($user, 403);
+
+        $filters = $this->guestFiltersFromRequest($request, false);
+
+        $guestHotelData = $this->resolveGuestHotelsForUser($user);
+        $allowedHotelIds = $guestHotelData['allowedHotelIds'];
+        $selectableHotelIds = $guestHotelData['selectableHotelIds'];
+
+        [$query] = $this->buildGuestQuery($filters, $allowedHotelIds, $selectableHotelIds);
+
+        $guests = $query->latest('id')
+            ->get()
+            ->map(function (Booking $booking) {
+                return [
+                    'name' => $booking->guest?->name,
+                    'identity_number' => $booking->guest?->identity_number,
+                    'email' => $booking->guest?->email,
+                    'phone_number' => $booking->guest?->phone_number,
+                    'hotel_name' => $booking->hotel?->name,
+                    'total_room' => $booking->total_room,
+                    'total_night' => $booking->total_night,
+                    'amount' => $booking->amount,
+                    'created_at' => optional($booking->created_at)->format('d-m-Y H:i'),
+                ];
+            })
+            ->values();
+
+        $pdf = Pdf::loadView('pdf.fi-sejahtera-guest-report', [
+            'guests' => $guests,
+            'filters' => [
+                'search' => $filters['search'],
+                'hotel_id' => $filters['hotel_id'],
+                'start_date' => $filters['start_date'],
+                'end_date' => $filters['end_date'],
+            ],
+            'generatedAt' => now()->format('d-m-Y H:i'),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('fi-sejahtera-guest-report-'.now()->format('Ymd_His').'.pdf');
     }
 
     public function create()

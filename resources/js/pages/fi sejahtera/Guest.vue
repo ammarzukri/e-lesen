@@ -36,6 +36,8 @@ interface GuestRow {
 interface GuestFilters {
     search?: string;
     hotel_id?: string;
+    start_date?: string;
+    end_date?: string;
 }
 
 const page = usePage<
@@ -64,8 +66,30 @@ const totalTax = computed<string>(() => {
     });
 });
 
+function getMonthDateRange() {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    const toDateInputValue = (value: Date) => {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
+    return {
+        startDate: toDateInputValue(firstDay),
+        endDate: toDateInputValue(lastDay),
+    };
+}
+
+const defaultMonthRange = getMonthDateRange();
+
 const search = ref<string>((page.props as any).filters?.search ?? '');
 const selectedHotelId = ref<string>((page.props as any).filters?.hotel_id ?? '');
+const startDate = ref<string>((page.props as any).filters?.start_date ?? defaultMonthRange.startDate);
+const endDate = ref<string>((page.props as any).filters?.end_date ?? defaultMonthRange.endDate);
 
 function applyFilters() {
     router.get(
@@ -73,6 +97,8 @@ function applyFilters() {
         {
             search: search.value || undefined,
             hotel_id: selectedHotelId.value || undefined,
+            start_date: startDate.value,
+            end_date: endDate.value,
         },
         {
             preserveState: true,
@@ -85,7 +111,34 @@ function applyFilters() {
 function resetFilters() {
     search.value = '';
     selectedHotelId.value = '';
+    startDate.value = '';
+    endDate.value = '';
     applyFilters();
+}
+
+function exportToPdf() {
+    const query = new URLSearchParams();
+
+    if (search.value) {
+        query.set('search', search.value);
+    }
+
+    if (selectedHotelId.value) {
+        query.set('hotel_id', selectedHotelId.value);
+    }
+
+    if (startDate.value) {
+        query.set('start_date', startDate.value);
+    }
+
+    if (endDate.value) {
+        query.set('end_date', endDate.value);
+    }
+
+    const queryString = query.toString();
+    const url = queryString ? `/fi-sejahtera/guest/export-pdf?${queryString}` : '/fi-sejahtera/guest/export-pdf';
+
+    window.location.href = url;
 }
 
 function formatCreatedAt(value?: string) {
@@ -166,9 +219,22 @@ function formatCreatedAt(value?: string) {
                                 </select>
                             </div>
 
+                            <div class="grid grid-cols-1 gap-4 md:col-span-3 md:grid-cols-2">
+                                <div>
+                                    <Label for="start_date" class="mb-1">Start Date</Label>
+                                    <Input id="start_date" v-model="startDate" type="date" class="w-full" />
+                                </div>
+
+                                <div>
+                                    <Label for="end_date" class="mb-1">End Date</Label>
+                                    <Input id="end_date" v-model="endDate" type="date" class="w-full" />
+                                </div>
+                            </div>
+
                             <div class="md:col-span-3 flex items-center gap-2">
                                 <Button type="submit">Cari</Button>
                                 <Button type="button" variant="outline" @click="resetFilters">Reset</Button>
+                                <Button type="button" variant="outline" @click="exportToPdf">Export to PDF</Button>
                             </div>
                         </form>
                     </CardContent>

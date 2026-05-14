@@ -259,6 +259,10 @@ Route::get('/fi-sejahtera/guest', [FiSejahteraController::class, 'guestIndex'])
     ->middleware(['auth'])
     ->name('fi-sejahtera.guest');
 
+Route::get('/fi-sejahtera/guest/export-pdf', [FiSejahteraController::class, 'guestExportPdf'])
+    ->middleware(['auth'])
+    ->name('fi-sejahtera.guest.export-pdf');
+
 Route::post('/fi-sejahtera/staff', [FiSejahteraController::class, 'staffStore'])
     ->middleware(['auth'])
     ->name('fi-sejahtera.staff.store');
