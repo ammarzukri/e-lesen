@@ -221,12 +221,12 @@ function formatCreatedAt(value?: string) {
 
                             <div class="grid grid-cols-1 gap-4 md:col-span-3 md:grid-cols-2">
                                 <div>
-                                    <Label for="start_date" class="mb-1">Start Date</Label>
+                                    <Label for="start_date" class="mb-1">Tarikh Mula</Label>
                                     <Input id="start_date" v-model="startDate" type="date" class="w-full" />
                                 </div>
 
                                 <div>
-                                    <Label for="end_date" class="mb-1">End Date</Label>
+                                    <Label for="end_date" class="mb-1">Tarikh Tamat</Label>
                                     <Input id="end_date" v-model="endDate" type="date" class="w-full" />
                                 </div>
                             </div>
@@ -234,7 +234,7 @@ function formatCreatedAt(value?: string) {
                             <div class="md:col-span-3 flex items-center gap-2">
                                 <Button type="submit">Cari</Button>
                                 <Button type="button" variant="outline" @click="resetFilters">Reset</Button>
-                                <Button type="button" variant="outline" @click="exportToPdf">Export to PDF</Button>
+                                <Button type="button" variant="secondary" @click="exportToPdf">Eksport ke PDF</Button>
                             </div>
                         </form>
                     </CardContent>
@@ -268,7 +268,7 @@ function formatCreatedAt(value?: string) {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle>Senarai</CardTitle>
+                        <CardTitle>Senarai Tetamu</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div class="overflow-x-auto">

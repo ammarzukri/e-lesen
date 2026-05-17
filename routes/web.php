@@ -235,6 +235,10 @@ Route::get('/fi-sejahtera/payment', [FiSejahteraController::class, 'paymentCreat
     ->middleware(['auth'])
     ->name('fi-sejahtera.payment');
 
+Route::get('/fi-sejahtera/perbendaharaan', [FiSejahteraController::class, 'treasuryPayment'])
+    ->middleware(['auth'])
+    ->name('fi-sejahtera.perbendaharaan');
+
 Route::post('/fi-sejahtera/payment', [FiSejahteraController::class, 'paymentStore'])
     ->middleware(['auth'])
     ->name('fi-sejahtera.payment.store');

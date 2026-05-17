@@ -22,6 +22,7 @@ const navigationItems = isAdminRole
 if (role === 'user') {
     navigationItems.push(
         { label: 'Urus Staf', href: '/fi-sejahtera/staff', icon: Users },
+    { label: 'Pembayaran ke Perbendaharaan', href: '/fi-sejahtera/perbendaharaan', icon: HandCoins },
         { label: 'Hantar Bukti Pembayaran', href: '/fi-sejahtera/payment', icon: HandCoins });
 }
 

@@ -838,6 +838,114 @@ class FiSejahteraController extends Controller
         ]);
     }
 
+    public function treasuryPayment(Request $request)
+    {
+        if ($redirect = $this->enforceFiSejahteraAccess()) {
+            return $redirect;
+        }
+
+        $this->ensureOwner();
+
+        $ownedHotels = Hotel::query()
+            ->where('user_id', auth()->id())
+            ->with('license:id,hotel_id,status,expiry_date')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $selectedMonth = (int) $request->query('month', now()->month);
+        $selectedYear = (int) $request->query('year', now()->year);
+        $selectedHotelId = (string) $request->query('hotel_id', '');
+
+        if ($selectedMonth < 1 || $selectedMonth > 12) {
+            $selectedMonth = (int) now()->month;
+        }
+
+        if ($selectedYear < 2000 || $selectedYear > 2100) {
+            $selectedYear = (int) now()->year;
+        }
+
+        $selectedHotel = null;
+
+        if ($selectedHotelId !== '' && ctype_digit($selectedHotelId)) {
+            $selectedHotel = $ownedHotels->first(
+                fn (Hotel $hotel) => $hotel->id === (int) $selectedHotelId
+            );
+        }
+
+        if (! $selectedHotel) {
+            $selectedHotel = $ownedHotels
+                ->first(fn (Hotel $hotel) => ! $this->isHotelLicenseExpired($hotel))
+                ?? $ownedHotels->first();
+
+            $selectedHotelId = $selectedHotel ? (string) $selectedHotel->id : '';
+        }
+
+        $monthStart = Carbon::create($selectedYear, $selectedMonth, 1)->startOfDay();
+        $monthEnd = $monthStart->copy()->endOfMonth()->endOfDay();
+
+        $dailyAccumulator = [];
+        $cursor = $monthStart->copy();
+
+        while ($cursor->lte($monthEnd)) {
+            $key = $cursor->toDateString();
+            $dailyAccumulator[$key] = [
+                'date' => $key,
+                'date_label' => $cursor->format('d/m/Y'),
+                'total_room' => 0,
+                'total_amount' => 0.0,
+            ];
+            $cursor->addDay();
+        }
+
+        if ($selectedHotelId !== '' && ctype_digit($selectedHotelId)) {
+            $bookings = Booking::query()
+                ->where('hotel_id', (int) $selectedHotelId)
+                ->whereDate('created_at', '<=', $monthEnd->toDateString())
+                ->where('total_night', '>', 0)
+                ->get(['created_at', 'total_room', 'total_night']);
+
+            foreach ($bookings as $booking) {
+                $startDate = Carbon::parse((string) $booking->created_at)->startOfDay();
+                $nightCount = max(0, (int) $booking->total_night);
+                $roomCount = max(0, (int) $booking->total_room);
+
+                if ($nightCount <= 0 || $roomCount <= 0) {
+                    continue;
+                }
+
+                for ($offset = 0; $offset < $nightCount; $offset++) {
+                    $affectedDate = $startDate->copy()->addDays($offset);
+
+                    if ($affectedDate->lt($monthStart) || $affectedDate->gt($monthEnd)) {
+                        continue;
+                    }
+
+                    $key = $affectedDate->toDateString();
+                    $dailyAccumulator[$key]['total_room'] += $roomCount;
+                    $dailyAccumulator[$key]['total_amount'] += ($roomCount * 3);
+                }
+            }
+        }
+
+        $dailyBreakdown = collect(array_values($dailyAccumulator));
+        $totalRoom = (int) $dailyBreakdown->sum('total_room');
+        $totalAmount = (float) $dailyBreakdown->sum('total_amount');
+
+        return Inertia::render('fi sejahtera/PembayaranPerbendaharaan', [
+            'ownedHotels' => $ownedHotels->map(fn (Hotel $hotel) => $this->mapHotelOption($hotel))->values(),
+            'filters' => [
+                'hotel_id' => $selectedHotelId,
+                'month' => $selectedMonth,
+                'year' => $selectedYear,
+            ],
+            'summary' => [
+                'total_room' => $totalRoom,
+                'total_amount' => $totalAmount,
+                'daily_breakdown' => $dailyBreakdown,
+            ],
+        ]);
+    }
+
     public function paymentStore(Request $request)
     {
         if ($redirect = $this->enforceFiSejahteraAccess()) {
