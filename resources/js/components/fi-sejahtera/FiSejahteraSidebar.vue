@@ -4,7 +4,7 @@ import { LayoutGrid, Shield, Users, DollarSign, HandCoins } from 'lucide-vue-nex
 
 const page = usePage();
 const role = page.props.auth?.user?.role;
-const isAdminRole = ['admin', 'bkt_admin', 'pbt_admin'].includes(role ?? '');
+const isAdminRole = ['admin', 'bkt_admin', 'pbt_admin', 'bendahara_admin'].includes(role ?? '');
 
 const navigationItems = isAdminRole
     ? [

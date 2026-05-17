@@ -36,7 +36,7 @@ const allApplications = computed(() => props.applications ?? []);
 const canApprove = computed<boolean>(() => Boolean(props.permissions?.canApprove));
 const canReject = computed<boolean>(() => Boolean(props.permissions?.canReject));
 const canBlock = computed<boolean>(() => Boolean(props.permissions?.canBlock));
-const canViewDetails = computed<boolean>(() => ['admin', 'bkt_admin', 'pbt_admin'].includes(page.props.auth?.user?.role ?? ''));
+const canViewDetails = computed<boolean>(() => ['admin', 'bkt_admin', 'pbt_admin', 'bendahara_admin'].includes(page.props.auth?.user?.role ?? ''));
 const isPbtAdmin = computed<boolean>(() => page.props.auth?.user?.role === 'pbt_admin');
 const isBktAdmin = computed<boolean>(() => ['admin', 'bkt_admin'].includes(page.props.auth?.user?.role ?? ''));
 

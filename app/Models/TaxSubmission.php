@@ -12,6 +12,12 @@ class TaxSubmission extends Model
         'year',
         'payment_proof',
         'guest_report',
+        'hotel_guest_list',
+        'payment_status',
+        'payment_amount',
+        'payment_billcode',
+        'payment_attempted_at',
+        'payment_paid_at',
         'submitted_at',
         'status',
         'verified_at',
@@ -22,7 +28,10 @@ class TaxSubmission extends Model
     protected $casts = [
         'submitted_at' => 'datetime',
         'verified_at' => 'datetime',
+        'payment_attempted_at' => 'datetime',
+        'payment_paid_at' => 'datetime',
         'year' => 'integer',
+        'payment_amount' => 'decimal:2',
     ];
 
     public function hotel()

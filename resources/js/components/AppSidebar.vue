@@ -22,7 +22,7 @@ import { type NavItem } from '@/types';
 import AppLogo from './AppLogo.vue';
 
 const page = usePage();
-const isAdmin = computed(() => ['admin', 'bkt_admin', 'pbt_admin'].includes(page.props.auth?.user?.role ?? ''));
+const isAdmin = computed(() => ['admin', 'bkt_admin', 'pbt_admin', 'bendahara_admin'].includes(page.props.auth?.user?.role ?? ''));
 const isStaff = computed(() => page.props.auth?.user?.role === 'staff');
 
 const mainNavItems = computed<NavItem[]>(() => {

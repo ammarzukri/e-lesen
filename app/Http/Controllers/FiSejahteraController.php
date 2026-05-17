@@ -16,12 +16,223 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class FiSejahteraController extends Controller
 {
+    protected function monthNumberToCode(int $month): string
+    {
+        $map = [
+            1 => 'jan', 2 => 'feb', 3 => 'mar', 4 => 'apr', 5 => 'may', 6 => 'jun',
+            7 => 'jul', 8 => 'aug', 9 => 'sep', 10 => 'oct', 11 => 'nov', 12 => 'dec',
+        ];
+
+        return $map[$month] ?? 'jan';
+    }
+
+    protected function monthCodeToNumber(string $month): int
+    {
+        $map = [
+            'jan' => 1, 'feb' => 2, 'mar' => 3, 'apr' => 4, 'may' => 5, 'jun' => 6,
+            'jul' => 7, 'aug' => 8, 'sep' => 9, 'oct' => 10, 'nov' => 11, 'dec' => 12,
+        ];
+
+        return $map[strtolower(trim($month))] ?? 1;
+    }
+
+    protected function monthCodeToLabel(string $month): string
+    {
+        $map = [
+            'jan' => 'Januari',
+            'feb' => 'Februari',
+            'mar' => 'Mac',
+            'apr' => 'April',
+            'may' => 'Mei',
+            'jun' => 'Jun',
+            'jul' => 'Julai',
+            'aug' => 'Ogos',
+            'sep' => 'September',
+            'oct' => 'Oktober',
+            'nov' => 'November',
+            'dec' => 'Disember',
+        ];
+
+        return $map[strtolower(trim($month))] ?? strtoupper($month);
+    }
+
+    protected function toyyibpayBaseUrl(): string
+    {
+        return config('services.toyyibpay.sandbox') ? 'https://dev.toyyibpay.com' : 'https://toyyibpay.com';
+    }
+
+    protected function calculateTreasurySummary(int $hotelId, int $selectedYear, int $selectedMonth): array
+    {
+        $monthStart = Carbon::create($selectedYear, $selectedMonth, 1)->startOfDay();
+        $monthEnd = $monthStart->copy()->endOfMonth()->endOfDay();
+
+        $dailyAccumulator = [];
+        $cursor = $monthStart->copy();
+
+        while ($cursor->lte($monthEnd)) {
+            $key = $cursor->toDateString();
+            $dailyAccumulator[$key] = [
+                'date' => $key,
+                'date_label' => $cursor->format('d/m/Y'),
+                'total_room' => 0,
+                'total_amount' => 0.0,
+            ];
+            $cursor->addDay();
+        }
+
+        $bookings = Booking::query()
+            ->where('hotel_id', $hotelId)
+            ->whereDate('created_at', '<=', $monthEnd->toDateString())
+            ->where('total_night', '>', 0)
+            ->get(['created_at', 'total_room', 'total_night']);
+
+        foreach ($bookings as $booking) {
+            $startDate = Carbon::parse((string) $booking->created_at)->startOfDay();
+            $nightCount = max(0, (int) $booking->total_night);
+            $roomCount = max(0, (int) $booking->total_room);
+
+            if ($nightCount <= 0 || $roomCount <= 0) {
+                continue;
+            }
+
+            for ($offset = 0; $offset < $nightCount; $offset++) {
+                $affectedDate = $startDate->copy()->addDays($offset);
+
+                if ($affectedDate->lt($monthStart) || $affectedDate->gt($monthEnd)) {
+                    continue;
+                }
+
+                $key = $affectedDate->toDateString();
+                $dailyAccumulator[$key]['total_room'] += $roomCount;
+                $dailyAccumulator[$key]['total_amount'] += ($roomCount * 3);
+            }
+        }
+
+        $dailyBreakdown = collect(array_values($dailyAccumulator));
+
+        return [
+            'total_room' => (int) $dailyBreakdown->sum('total_room'),
+            'total_amount' => (float) $dailyBreakdown->sum('total_amount'),
+            'daily_breakdown' => $dailyBreakdown,
+        ];
+    }
+
+    protected function generateTaxReceiptDocument(TaxSubmission $submission): string
+    {
+        $hotelName = $submission->hotel?->name ?? 'Hotel';
+        $monthLabel = $this->monthCodeToLabel($submission->month);
+        $filePath = 'tax-submissions/receipts/receipt-'.$submission->id.'-'.now()->format('YmdHis').'.pdf';
+
+        $pdf = Pdf::loadView('pdf.fi-sejahtera-tax-receipt', [
+            'submission' => $submission,
+            'hotelName' => $hotelName,
+            'monthLabel' => $monthLabel,
+            'generatedAt' => now(),
+        ]);
+
+        Storage::disk('public')->put($filePath, $pdf->output());
+
+        return $filePath;
+    }
+
+    protected function generateTaxGuestListDocument(TaxSubmission $submission): string
+    {
+        $monthNumber = $this->monthCodeToNumber($submission->month);
+        $monthStart = Carbon::create((int) $submission->year, $monthNumber, 1)->startOfDay();
+        $monthEnd = $monthStart->copy()->endOfMonth()->endOfDay();
+
+        $bookings = Booking::query()
+            ->with(['guest:id,name,identity_number,email,phone_number'])
+            ->where('hotel_id', $submission->hotel_id)
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (Booking $booking) {
+                return [
+                    'date' => optional($booking->created_at)->format('d/m/Y'),
+                    'name' => $booking->guest?->name,
+                    'identity_number' => $booking->guest?->identity_number,
+                    'phone_number' => $booking->guest?->phone_number,
+                    'total_room' => (int) $booking->total_room,
+                    'total_night' => (int) $booking->total_night,
+                    'amount' => (float) $booking->amount,
+                ];
+            })
+            ->values();
+
+        $filePath = 'tax-submissions/guest-reports/guest-list-'.$submission->id.'-'.now()->format('YmdHis').'.pdf';
+
+        $pdf = Pdf::loadView('pdf.fi-sejahtera-payment-guest-list', [
+            'submission' => $submission,
+            'hotelName' => $submission->hotel?->name ?? 'Hotel',
+            'monthLabel' => $this->monthCodeToLabel($submission->month),
+            'bookings' => $bookings,
+            'generatedAt' => now(),
+        ]);
+
+        Storage::disk('public')->put($filePath, $pdf->output());
+
+        return $filePath;
+    }
+
+    protected function syncTaxSubmissionPaymentStatus(string $billCode, TaxSubmission $submission): bool
+    {
+        $baseUrl = $this->toyyibpayBaseUrl();
+
+        $response = Http::asForm()->post($baseUrl.'/index.php/api/getBillTransactions', [
+            'billCode' => $billCode,
+        ]);
+
+        $payload = $response->json();
+        $paymentStatus = data_get($payload, '0.billpaymentStatus')
+            ?? data_get($payload, 'billpaymentStatus');
+
+        $isSuccess = in_array((string) $paymentStatus, ['1', 'success', 'SUCCESS'], true);
+
+        if (! $isSuccess) {
+            $submission->update([
+                'payment_status' => 'Gagal',
+                'payment_paid_at' => null,
+            ]);
+
+            return false;
+        }
+
+        $oldReceipt = $submission->payment_proof;
+        $oldGuestList = $submission->guest_report;
+
+        $receiptPath = $this->generateTaxReceiptDocument($submission);
+        $guestListPath = $this->generateTaxGuestListDocument($submission);
+
+        if ($oldReceipt && $oldReceipt !== $receiptPath) {
+            Storage::disk('public')->delete($oldReceipt);
+        }
+
+        if ($oldGuestList && $oldGuestList !== $guestListPath) {
+            Storage::disk('public')->delete($oldGuestList);
+        }
+
+        $submission->update([
+            'payment_status' => 'Berjaya',
+            'payment_paid_at' => now(),
+            'payment_proof' => $receiptPath,
+            'guest_report' => $guestListPath,
+            'status' => 'paid',
+            'verified_at' => null,
+            'verified_by' => null,
+            'remarks' => null,
+        ]);
+
+        return true;
+    }
+
     protected function resolveGuestHotelsForUser(User $user): array
     {
         $hotels = collect();
@@ -251,6 +462,11 @@ class FiSejahteraController extends Controller
         return ($user ?? auth()->user())?->role === 'pbt_admin';
     }
 
+    protected function isBendaharaAdmin(?User $user = null): bool
+    {
+        return ($user ?? auth()->user())?->role === 'bendahara_admin';
+    }
+
     protected function pbtAdminName(?User $user = null): string
     {
         return trim((string) ($user ?? auth()->user())?->pbt_name);
@@ -261,6 +477,358 @@ class FiSejahteraController extends Controller
         if ($this->isPbtAdmin($user) && $this->pbtAdminName($user) === '') {
             abort(403, 'Akaun pbt_admin tidak mempunyai PBT yang ditetapkan.');
         }
+    }
+
+    public function paymentCreate()
+    {
+        if ($redirect = $this->enforceFiSejahteraAccess()) {
+            return $redirect;
+        }
+
+        $this->ensureOwner();
+
+        $ownedHotelIds = Hotel::query()
+            ->where('user_id', auth()->id())
+            ->pluck('id');
+
+        $submissions = TaxSubmission::query()
+            ->with(['hotel:id,name'])
+            ->whereIn('hotel_id', $ownedHotelIds)
+            ->latest('id')
+            ->get()
+            ->map(function (TaxSubmission $submission) {
+                return [
+                    'id' => $submission->id,
+                    'hotel_name' => $submission->hotel?->name,
+                    'month' => $submission->month,
+                    'year' => $submission->year,
+                    'payment_status' => $submission->payment_status,
+                    'total_amount' => (float) $submission->payment_amount,
+                    'receipt_url' => $submission->payment_proof ? Storage::url($submission->payment_proof) : null,
+                    'guest_list_url' => $submission->guest_report ? Storage::url($submission->guest_report) : null,
+                    'hotel_guest_list_url' => $submission->hotel_guest_list ? Storage::url($submission->hotel_guest_list) : null,
+                    'status' => $submission->status,
+                ];
+            })
+            ->values();
+
+        return Inertia::render('fi sejahtera/PaymentDoc', [
+            'submissions' => $submissions,
+        ]);
+    }
+
+    public function treasuryPayment(Request $request)
+    {
+        if ($redirect = $this->enforceFiSejahteraAccess()) {
+            return $redirect;
+        }
+
+        $this->ensureOwner();
+
+        $ownedHotels = Hotel::query()
+            ->where('user_id', auth()->id())
+            ->with('license:id,hotel_id,status,expiry_date')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $selectedMonth = (int) $request->query('month', now()->month);
+        $selectedYear = (int) $request->query('year', now()->year);
+        $selectedHotelId = (string) $request->query('hotel_id', '');
+
+        if ($selectedMonth < 1 || $selectedMonth > 12) {
+            $selectedMonth = (int) now()->month;
+        }
+
+        if ($selectedYear < 2000 || $selectedYear > 2100) {
+            $selectedYear = (int) now()->year;
+        }
+
+        $selectedHotel = null;
+
+        if ($selectedHotelId !== '' && ctype_digit($selectedHotelId)) {
+            $selectedHotel = $ownedHotels->first(
+                fn (Hotel $hotel) => $hotel->id === (int) $selectedHotelId
+            );
+        }
+
+        if (! $selectedHotel) {
+            $selectedHotel = $ownedHotels
+                ->first(fn (Hotel $hotel) => ! $this->isHotelLicenseExpired($hotel))
+                ?? $ownedHotels->first();
+
+            $selectedHotelId = $selectedHotel ? (string) $selectedHotel->id : '';
+        }
+
+        $summary = [
+            'total_room' => 0,
+            'total_amount' => 0.0,
+            'daily_breakdown' => collect(),
+        ];
+
+        if ($selectedHotelId !== '' && ctype_digit($selectedHotelId)) {
+            $summary = $this->calculateTreasurySummary((int) $selectedHotelId, $selectedYear, $selectedMonth);
+        }
+
+        return Inertia::render('fi sejahtera/Payment', [
+            'ownedHotels' => $ownedHotels->map(fn (Hotel $hotel) => $this->mapHotelOption($hotel))->values(),
+            'filters' => [
+                'hotel_id' => $selectedHotelId,
+                'month' => $selectedMonth,
+                'year' => $selectedYear,
+            ],
+            'summary' => $summary,
+        ]);
+    }
+
+    public function paymentStart(Request $request)
+    {
+        if ($redirect = $this->enforceFiSejahteraAccess()) {
+            return $redirect;
+        }
+
+        $this->ensureOwner();
+
+        $validated = $request->validate([
+            'hotel_id' => ['required', 'integer', 'exists:hotels,id'],
+            'month' => ['required', 'integer', 'between:1,12'],
+            'year' => ['required', 'integer', 'between:2000,2100'],
+        ]);
+
+        $hotel = Hotel::query()
+            ->where('user_id', auth()->id())
+            ->where('id', (int) $validated['hotel_id'])
+            ->with('license:id,hotel_id,status,expiry_date')
+            ->first();
+
+        if (! $hotel) {
+            throw ValidationException::withMessages([
+                'hotel_id' => 'Hotel tidak ditemui untuk akaun ini.',
+            ]);
+        }
+
+        if ($this->isHotelLicenseExpired($hotel)) {
+            throw ValidationException::withMessages([
+                'hotel_id' => 'Lesen Penginapan Tamat Tempoh.',
+            ]);
+        }
+
+        $monthCode = $this->monthNumberToCode((int) $validated['month']);
+        $summary = $this->calculateTreasurySummary($hotel->id, (int) $validated['year'], (int) $validated['month']);
+        $amount = (float) ($summary['total_amount'] ?? 0.0);
+
+        if ($amount <= 0) {
+            return redirect()->route('fi-sejahtera.perbendaharaan', [
+                'hotel_id' => $hotel->id,
+                'month' => $validated['month'],
+                'year' => $validated['year'],
+            ])->with('error', 'Tiada jumlah bayaran untuk diteruskan.');
+        }
+
+        $existingPaidSubmission = TaxSubmission::query()
+            ->where('hotel_id', $hotel->id)
+            ->where('month', $monthCode)
+            ->where('year', (int) $validated['year'])
+            ->where('payment_status', 'Berjaya')
+            ->latest('id')
+            ->first();
+
+        if ($existingPaidSubmission) {
+            return redirect()->route('fi-sejahtera.payment')->with('success', 'Bayaran untuk bulan dan tahun ini telah berjaya direkodkan.');
+        }
+
+        $secretKey = config('services.toyyibpay.key') ?? env('TOYYIBPAY_API_KEY');
+        $categoryCode = config('services.toyyibpay.category_code') ?? env('TOYYIBPAY_CATEGORY_CODE');
+
+        if (! $secretKey || ! $categoryCode) {
+            return redirect()->route('fi-sejahtera.perbendaharaan', [
+                'hotel_id' => $hotel->id,
+                'month' => $validated['month'],
+                'year' => $validated['year'],
+            ])->with('error', 'Tetapan ToyyibPay tidak lengkap. Sila hubungi pentadbir.');
+        }
+
+        $submission = TaxSubmission::query()
+            ->where('hotel_id', $hotel->id)
+            ->where('month', $monthCode)
+            ->where('year', (int) $validated['year'])
+            ->where('payment_status', '!=', 'Berjaya')
+            ->latest('id')
+            ->first();
+
+        if (! $submission) {
+            $submission = TaxSubmission::create([
+                'hotel_id' => $hotel->id,
+                'month' => $monthCode,
+                'year' => (int) $validated['year'],
+                'payment_proof' => '',
+                'guest_report' => '',
+                'submitted_at' => now(),
+                'status' => 'payment_pending',
+                'payment_status' => 'Dalam Proses',
+                'payment_amount' => $amount,
+                'payment_attempted_at' => now(),
+                'verified_at' => null,
+                'verified_by' => null,
+                'remarks' => null,
+            ]);
+        } else {
+            $submission->update([
+                'payment_status' => 'Dalam Proses',
+                'payment_amount' => $amount,
+                'payment_attempted_at' => now(),
+                'status' => 'payment_pending',
+                'verified_at' => null,
+                'verified_by' => null,
+                'remarks' => null,
+            ]);
+        }
+
+        $baseUrl = $this->toyyibpayBaseUrl();
+        $amountInCents = (int) round($amount * 100);
+
+        $response = Http::asForm()->post($baseUrl.'/index.php/api/createBill', [
+            'userSecretKey' => $secretKey,
+            'categoryCode' => $categoryCode,
+            'billName' => 'Bayaran Fi Sejahtera',
+            'billDescription' => 'Bayaran fi sejahtera untuk '.$hotel->name,
+            'billPriceSetting' => 1,
+            'billPayorInfo' => 1,
+            'billAmount' => $amountInCents,
+            'billReturnUrl' => route('fi-sejahtera.payment.return'),
+            'billCallbackUrl' => route('fi-sejahtera.payment.callback'),
+            'billExternalReferenceNo' => (string) $submission->id,
+            'billTo' => auth()->user()?->name ?? 'Pemilik Hotel',
+            'billEmail' => auth()->user()?->email ?? 'no-reply@example.com',
+            'billPhone' => auth()->user()?->phone_number ?? '',
+        ]);
+
+        if (! $response->successful()) {
+            return redirect()->route('fi-sejahtera.perbendaharaan', [
+                'hotel_id' => $hotel->id,
+                'month' => $validated['month'],
+                'year' => $validated['year'],
+            ])->with('error', 'Gagal memulakan pembayaran ToyyibPay. Sila cuba lagi.');
+        }
+
+        $payload = $response->json();
+        $billCode = data_get($payload, '0.BillCode') ?? data_get($payload, 'BillCode');
+
+        if (! $billCode) {
+            return redirect()->route('fi-sejahtera.perbendaharaan', [
+                'hotel_id' => $hotel->id,
+                'month' => $validated['month'],
+                'year' => $validated['year'],
+            ])->with('error', 'Gagal mendapatkan kod pembayaran ToyyibPay.');
+        }
+
+        $submission->update([
+            'payment_billcode' => (string) $billCode,
+            'payment_attempted_at' => now(),
+        ]);
+
+        $paymentUrl = $baseUrl.'/'.$billCode;
+
+        if ($request->header('X-Inertia')) {
+            return Inertia::location($paymentUrl);
+        }
+
+        return redirect()->away($paymentUrl);
+    }
+
+    public function handlePaymentReturn(Request $request)
+    {
+        $billCode = $request->query('billcode') ?? $request->query('billCode');
+
+        if (! $billCode) {
+            return redirect()->route('fi-sejahtera.perbendaharaan')->with('error', 'Maklumat pembayaran tidak ditemui.');
+        }
+
+        $submission = TaxSubmission::query()
+            ->with('hotel:id,user_id')
+            ->where('payment_billcode', (string) $billCode)
+            ->latest('id')
+            ->first();
+
+        if (! $submission || $submission->hotel?->user_id !== auth()->id()) {
+            return redirect()->route('fi-sejahtera.perbendaharaan')->with('error', 'Rekod pembayaran tidak sah.');
+        }
+
+        $isSuccess = $this->syncTaxSubmissionPaymentStatus((string) $billCode, $submission);
+
+        return redirect()->route('fi-sejahtera.payment')->with(
+            $isSuccess ? 'success' : 'error',
+            $isSuccess
+                ? 'Pembayaran berjaya. Sila lengkapkan dokumen tambahan di bawah.'
+                : 'Pembayaran gagal. Sila cuba semula.'
+        );
+    }
+
+    public function handlePaymentCallback(Request $request)
+    {
+        $billCode = $request->input('billcode') ?? $request->input('billCode');
+
+        if (! $billCode) {
+            return response()->json(['status' => 'missing-billcode'], 400);
+        }
+
+        $submission = TaxSubmission::query()
+            ->where('payment_billcode', (string) $billCode)
+            ->latest('id')
+            ->first();
+
+        if (! $submission) {
+            return response()->json(['status' => 'not-found'], 404);
+        }
+
+        $this->syncTaxSubmissionPaymentStatus((string) $billCode, $submission);
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    public function paymentStore(Request $request)
+    {
+        if ($redirect = $this->enforceFiSejahteraAccess()) {
+            return $redirect;
+        }
+
+        $this->ensureOwner();
+
+        $validated = $request->validate([
+            'submission_id' => ['required', 'integer', 'exists:tax_submissions,id'],
+            'hotel_guest_list' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+        ]);
+
+        $submission = TaxSubmission::query()
+            ->with('hotel:id,user_id')
+            ->where('id', (int) $validated['submission_id'])
+            ->firstOrFail();
+
+        if ($submission->hotel?->user_id !== auth()->id()) {
+            abort(403);
+        }
+
+        if ($submission->payment_status !== 'Berjaya') {
+            throw ValidationException::withMessages([
+                'hotel_guest_list' => 'Pembayaran belum berjaya. Sila lengkapkan bayaran terlebih dahulu.',
+            ]);
+        }
+
+        if ($submission->hotel_guest_list) {
+            Storage::disk('public')->delete($submission->hotel_guest_list);
+        }
+
+        $hotelGuestListPath = $request->file('hotel_guest_list')->store('tax-submissions/hotel-system-guest-lists', 'public');
+
+        $submission->update([
+            'hotel_guest_list' => $hotelGuestListPath,
+            'status' => 'submitted',
+            'submitted_at' => now(),
+            'verified_at' => null,
+            'verified_by' => null,
+            'remarks' => null,
+        ]);
+
+        return redirect()->route('fi-sejahtera.payment')->with('success', 'Dokumen berjaya dihantar untuk semakan.');
     }
 
     public function dashboard(Request $request)
@@ -290,7 +858,7 @@ class FiSejahteraController extends Controller
                 ->filter(fn (Hotel $hotel) => ! $this->isHotelLicenseExpired($hotel))
                 ->pluck('id');
             $canSelectHotel = true;
-        } elseif ($this->isBktAdmin($user)) {
+        } elseif ($this->isBktAdmin($user) || $this->isBendaharaAdmin($user)) {
             $hotels = Hotel::with('license:id,hotel_id,status,expiry_date')
                 ->orderBy('name')
                 ->get(['id', 'name']);
@@ -815,285 +1383,6 @@ class FiSejahteraController extends Controller
         ]);
     }
 
-    public function paymentCreate()
-    {
-        if ($redirect = $this->enforceFiSejahteraAccess()) {
-            return $redirect;
-        }
-
-        $this->ensureOwner();
-
-        $ownedHotels = Hotel::query()
-            ->where('user_id', auth()->id())
-            ->with('license:id,hotel_id,status,expiry_date')
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
-        $selectedHotelId = $ownedHotels
-            ->first(fn (Hotel $hotel) => ! $this->isHotelLicenseExpired($hotel))?->id;
-
-        return Inertia::render('fi sejahtera/Payment', [
-            'ownedHotels' => $ownedHotels->map(fn (Hotel $hotel) => $this->mapHotelOption($hotel))->values(),
-            'selectedHotelId' => $selectedHotelId,
-        ]);
-    }
-
-    public function treasuryPayment(Request $request)
-    {
-        if ($redirect = $this->enforceFiSejahteraAccess()) {
-            return $redirect;
-        }
-
-        $this->ensureOwner();
-
-        $ownedHotels = Hotel::query()
-            ->where('user_id', auth()->id())
-            ->with('license:id,hotel_id,status,expiry_date')
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
-        $selectedMonth = (int) $request->query('month', now()->month);
-        $selectedYear = (int) $request->query('year', now()->year);
-        $selectedHotelId = (string) $request->query('hotel_id', '');
-
-        if ($selectedMonth < 1 || $selectedMonth > 12) {
-            $selectedMonth = (int) now()->month;
-        }
-
-        if ($selectedYear < 2000 || $selectedYear > 2100) {
-            $selectedYear = (int) now()->year;
-        }
-
-        $selectedHotel = null;
-
-        if ($selectedHotelId !== '' && ctype_digit($selectedHotelId)) {
-            $selectedHotel = $ownedHotels->first(
-                fn (Hotel $hotel) => $hotel->id === (int) $selectedHotelId
-            );
-        }
-
-        if (! $selectedHotel) {
-            $selectedHotel = $ownedHotels
-                ->first(fn (Hotel $hotel) => ! $this->isHotelLicenseExpired($hotel))
-                ?? $ownedHotels->first();
-
-            $selectedHotelId = $selectedHotel ? (string) $selectedHotel->id : '';
-        }
-
-        $monthStart = Carbon::create($selectedYear, $selectedMonth, 1)->startOfDay();
-        $monthEnd = $monthStart->copy()->endOfMonth()->endOfDay();
-
-        $dailyAccumulator = [];
-        $cursor = $monthStart->copy();
-
-        while ($cursor->lte($monthEnd)) {
-            $key = $cursor->toDateString();
-            $dailyAccumulator[$key] = [
-                'date' => $key,
-                'date_label' => $cursor->format('d/m/Y'),
-                'total_room' => 0,
-                'total_amount' => 0.0,
-            ];
-            $cursor->addDay();
-        }
-
-        if ($selectedHotelId !== '' && ctype_digit($selectedHotelId)) {
-            $bookings = Booking::query()
-                ->where('hotel_id', (int) $selectedHotelId)
-                ->whereDate('created_at', '<=', $monthEnd->toDateString())
-                ->where('total_night', '>', 0)
-                ->get(['created_at', 'total_room', 'total_night']);
-
-            foreach ($bookings as $booking) {
-                $startDate = Carbon::parse((string) $booking->created_at)->startOfDay();
-                $nightCount = max(0, (int) $booking->total_night);
-                $roomCount = max(0, (int) $booking->total_room);
-
-                if ($nightCount <= 0 || $roomCount <= 0) {
-                    continue;
-                }
-
-                for ($offset = 0; $offset < $nightCount; $offset++) {
-                    $affectedDate = $startDate->copy()->addDays($offset);
-
-                    if ($affectedDate->lt($monthStart) || $affectedDate->gt($monthEnd)) {
-                        continue;
-                    }
-
-                    $key = $affectedDate->toDateString();
-                    $dailyAccumulator[$key]['total_room'] += $roomCount;
-                    $dailyAccumulator[$key]['total_amount'] += ($roomCount * 3);
-                }
-            }
-        }
-
-        $dailyBreakdown = collect(array_values($dailyAccumulator));
-        $totalRoom = (int) $dailyBreakdown->sum('total_room');
-        $totalAmount = (float) $dailyBreakdown->sum('total_amount');
-
-        return Inertia::render('fi sejahtera/PembayaranPerbendaharaan', [
-            'ownedHotels' => $ownedHotels->map(fn (Hotel $hotel) => $this->mapHotelOption($hotel))->values(),
-            'filters' => [
-                'hotel_id' => $selectedHotelId,
-                'month' => $selectedMonth,
-                'year' => $selectedYear,
-            ],
-            'summary' => [
-                'total_room' => $totalRoom,
-                'total_amount' => $totalAmount,
-                'daily_breakdown' => $dailyBreakdown,
-            ],
-        ]);
-    }
-
-    public function paymentStore(Request $request)
-    {
-        if ($redirect = $this->enforceFiSejahteraAccess()) {
-            return $redirect;
-        }
-
-        $this->ensureOwner();
-
-        $validated = $request->validate([
-            'submission_id' => ['nullable', 'integer', 'exists:tax_submissions,id'],
-            'hotel_id' => ['required', 'integer', 'exists:hotels,id'],
-            'month' => ['required', 'string', 'in:jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec'],
-            'year' => ['required', 'integer', 'between:2000,2100'],
-        ]);
-
-        $hotel = Hotel::query()
-            ->where('user_id', auth()->id())
-            ->where('id', (int) $validated['hotel_id'])
-            ->with('license:id,hotel_id,status,expiry_date')
-            ->first();
-
-        if (! $hotel) {
-            throw ValidationException::withMessages([
-                'month' => 'Hotel tidak ditemui untuk akaun ini.',
-            ]);
-        }
-
-        if ($this->isHotelLicenseExpired($hotel)) {
-            throw ValidationException::withMessages([
-                'hotel_id' => 'Lesen Penginapan Tamat Tempoh.',
-            ]);
-        }
-
-        $existingApprovedOrPending = TaxSubmission::query()
-            ->where('hotel_id', $hotel->id)
-            ->where('month', $validated['month'])
-            ->where('year', (int) $validated['year'])
-            ->where('status', '!=', 'rejected')
-            ->exists();
-
-        if ($existingApprovedOrPending) {
-            throw ValidationException::withMessages([
-                'month' => 'Penghantaran untuk bulan dan tahun ini telah dibuat.',
-            ]);
-        }
-
-        $targetSubmissionId = isset($validated['submission_id'])
-            ? (int) $validated['submission_id']
-            : null;
-
-        $rejectedSubmission = null;
-
-        if ($targetSubmissionId) {
-            $rejectedSubmission = TaxSubmission::query()
-                ->where('id', $targetSubmissionId)
-                ->where('hotel_id', $hotel->id)
-                ->where('month', $validated['month'])
-                ->where('year', (int) $validated['year'])
-                ->where('status', 'rejected')
-                ->first();
-
-            if (! $rejectedSubmission) {
-                throw ValidationException::withMessages([
-                    'month' => 'Rekod penghantaran semula tidak sah atau telah berubah. Sila cuba semula dari senarai cukai.',
-                ]);
-            }
-        } else {
-            $rejectedSubmission = TaxSubmission::query()
-                ->where('hotel_id', $hotel->id)
-                ->where('month', $validated['month'])
-                ->where('year', (int) $validated['year'])
-                ->where('status', 'rejected')
-                ->latest('id')
-                ->first();
-        }
-
-        $fileRules = [
-            'payment_proof' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-            'guest_report' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-        ];
-
-        if ($rejectedSubmission) {
-            $fileRules = [
-                'payment_proof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-                'guest_report' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
-            ];
-        }
-
-        $fileValidated = $request->validate($fileRules);
-
-        if ($rejectedSubmission && ! $request->hasFile('payment_proof') && ! $request->hasFile('guest_report')) {
-            throw ValidationException::withMessages([
-                'payment_proof' => 'Sila muat naik sekurang-kurangnya satu fail untuk hantar semula.',
-            ]);
-        }
-
-        if ($rejectedSubmission) {
-            $paymentProofPath = $rejectedSubmission->payment_proof;
-            $guestReportPath = $rejectedSubmission->guest_report;
-
-            if ($request->hasFile('payment_proof')) {
-                if ($rejectedSubmission->payment_proof) {
-                    Storage::disk('public')->delete($rejectedSubmission->payment_proof);
-                }
-
-                $paymentProofPath = $request->file('payment_proof')->store('tax-submissions/payment-proofs', 'public');
-            }
-
-            if ($request->hasFile('guest_report')) {
-                if ($rejectedSubmission->guest_report) {
-                    Storage::disk('public')->delete($rejectedSubmission->guest_report);
-                }
-
-                $guestReportPath = $request->file('guest_report')->store('tax-submissions/guest-reports', 'public');
-            }
-
-            $rejectedSubmission->update([
-                'payment_proof' => $paymentProofPath,
-                'guest_report' => $guestReportPath,
-                'submitted_at' => now(),
-                'status' => 'submitted',
-                'verified_at' => null,
-                'verified_by' => null,
-                'remarks' => null,
-            ]);
-
-            return redirect()->route('fi-sejahtera.payment')->with('success', 'Penghantaran semula berjaya. Rekod menunggu semakan semula.');
-        }
-
-        $paymentProofPath = $fileValidated['payment_proof']->store('tax-submissions/payment-proofs', 'public');
-        $guestReportPath = $fileValidated['guest_report']->store('tax-submissions/guest-reports', 'public');
-
-        TaxSubmission::create([
-            'hotel_id' => $hotel->id,
-            'month' => $validated['month'],
-            'year' => (int) $validated['year'],
-            'payment_proof' => $paymentProofPath,
-            'guest_report' => $guestReportPath,
-            'submitted_at' => now(),
-            'status' => 'submitted',
-            'verified_at' => null,
-            'verified_by' => null,
-            'remarks' => null,
-        ]);
-
-        return redirect()->route('fi-sejahtera.payment')->with('success', 'Bukti pembayaran berjaya dihantar.');
-    }
-
     public function taxList()
     {
         if ($redirect = $this->enforceFiSejahteraAccess()) {
@@ -1108,6 +1397,8 @@ class FiSejahteraController extends Controller
 
         if ($this->isBktAdmin($user)) {
             // admin can review all submissions
+        } elseif ($this->isBendaharaAdmin($user)) {
+            $query->whereIn('status', ['bkt_verified', 'verified', 'rejected']);
         } elseif ($this->isPbtAdmin($user)) {
             $this->ensurePbtAdminHasPbt($user);
 
@@ -1145,8 +1436,10 @@ class FiSejahteraController extends Controller
                     'hotel_name' => $submission->hotel?->name,
                     'month' => $submission->month,
                     'year' => $submission->year,
+                    'amount' => (float) $submission->payment_amount,
                     'payment_proof_url' => Storage::url($submission->payment_proof),
                     'guest_report_url' => Storage::url($submission->guest_report),
+                    'hotel_guest_list_url' => $submission->hotel_guest_list ? Storage::url($submission->hotel_guest_list) : null,
                     'submitted_at' => optional($submission->submitted_at)->toDateTimeString(),
                     'status' => $submission->status,
                     'verified_at' => optional($submission->verified_at)->toDateTimeString(),
@@ -1158,7 +1451,8 @@ class FiSejahteraController extends Controller
 
         return Inertia::render('fi sejahtera/TaxList', [
             'submissions' => $submissions,
-            'isAdmin' => $this->isBktAdmin($user),
+            'isAdmin' => $this->isBktAdmin($user) || $this->isBendaharaAdmin($user),
+            'approverRole' => $this->isBendaharaAdmin($user) ? 'bendahara_admin' : ($this->isBktAdmin($user) ? 'bkt_admin' : null),
         ]);
     }
 
@@ -1168,20 +1462,39 @@ class FiSejahteraController extends Controller
             return $redirect;
         }
 
+        $user = auth()->user();
+
+        abort_unless($user, 403);
+
+        if ($this->isBendaharaAdmin($user)) {
+            if ($taxSubmission->status !== 'bkt_verified') {
+                return redirect()->route('fi-sejahtera.tax')->with('error', 'Hanya penghantaran yang telah diluluskan BKT boleh disahkan oleh Bendahara.');
+            }
+
+            $taxSubmission->update([
+                'status' => 'verified',
+                'verified_at' => now(),
+                'verified_by' => auth()->id(),
+                'remarks' => null,
+            ]);
+
+            return redirect()->route('fi-sejahtera.tax')->with('success', 'Penghantaran cukai berjaya disahkan oleh Bendahara.');
+        }
+
         $this->ensureBktAdmin();
 
-        if ($taxSubmission->status === 'verified') {
-            return redirect()->route('fi-sejahtera.tax')->with('error', 'Penghantaran cukai yang telah disahkan tidak boleh dikemas kini.');
+        if (! in_array($taxSubmission->status, ['submitted', 'rejected'], true)) {
+            return redirect()->route('fi-sejahtera.tax')->with('error', 'Hanya penghantaran dokumen yang telah dihantar boleh disahkan.');
         }
 
         $taxSubmission->update([
-            'status' => 'verified',
+            'status' => 'bkt_verified',
             'verified_at' => now(),
             'verified_by' => auth()->id(),
             'remarks' => null,
         ]);
 
-        return redirect()->route('fi-sejahtera.tax')->with('success', 'Penghantaran cukai berjaya disahkan.');
+        return redirect()->route('fi-sejahtera.tax')->with('success', 'Penghantaran cukai berjaya diluluskan peringkat BKT.');
     }
 
     public function taxReject(Request $request, TaxSubmission $taxSubmission)
@@ -1190,10 +1503,20 @@ class FiSejahteraController extends Controller
             return $redirect;
         }
 
-        $this->ensureBktAdmin();
+        $user = auth()->user();
 
-        if ($taxSubmission->status === 'verified') {
-            return redirect()->route('fi-sejahtera.tax')->with('error', 'Penghantaran cukai yang telah disahkan tidak boleh dikemas kini.');
+        abort_unless($user, 403);
+
+        if ($this->isBendaharaAdmin($user)) {
+            if ($taxSubmission->status !== 'bkt_verified') {
+                return redirect()->route('fi-sejahtera.tax')->with('error', 'Hanya penghantaran yang telah diluluskan BKT boleh ditolak oleh Bendahara.');
+            }
+        } else {
+            $this->ensureBktAdmin();
+
+            if (! in_array($taxSubmission->status, ['submitted', 'rejected'], true)) {
+                return redirect()->route('fi-sejahtera.tax')->with('error', 'Hanya penghantaran dokumen yang telah dihantar boleh ditolak.');
+            }
         }
 
         $validated = $request->validate([

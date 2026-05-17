@@ -28,7 +28,7 @@ Route::get('/countries', [CountryController::class, 'index'])
 
 Route::get('dashboard', function () {
     $user = auth()->user();
-    $isBktAdmin = $user && in_array($user->role, ['admin', 'bkt_admin'], true);
+    $isBktAdmin = $user && in_array($user->role, ['admin', 'bkt_admin', 'bendahara_admin'], true);
     $isPbtAdmin = $user && $user->role === 'pbt_admin';
 
     if ($isBktAdmin || $isPbtAdmin) {
@@ -243,6 +243,17 @@ Route::post('/fi-sejahtera/payment', [FiSejahteraController::class, 'paymentStor
     ->middleware(['auth'])
     ->name('fi-sejahtera.payment.store');
 
+Route::get('/fi-sejahtera/payment/start', [FiSejahteraController::class, 'paymentStart'])
+    ->middleware(['auth'])
+    ->name('fi-sejahtera.payment.start');
+
+Route::get('/fi-sejahtera/payment/return', [FiSejahteraController::class, 'handlePaymentReturn'])
+    ->middleware(['auth'])
+    ->name('fi-sejahtera.payment.return');
+
+Route::post('/fi-sejahtera/payment/callback', [FiSejahteraController::class, 'handlePaymentCallback'])
+    ->name('fi-sejahtera.payment.callback');
+
 Route::get('/fi-sejahtera/tax', [FiSejahteraController::class, 'taxList'])
     ->middleware(['auth'])
     ->name('fi-sejahtera.tax');
@@ -362,6 +373,10 @@ Route::get('/admin/license-documents/{document}', [LicenseApplicationController:
 Route::get('/admin/license-renewals', [LicenseApplicationController::class, 'adminRenewalIndex'])
     ->middleware(['auth'])
     ->name('admin.license.renewals');
+
+Route::get('/admin/license-renewals/{renewal}', [LicenseApplicationController::class, 'adminRenewalShow'])
+    ->middleware(['auth'])
+    ->name('admin.license.renewals.show');
 
 Route::post('/admin/license-renewals/{renewal}/approve', [LicenseApplicationController::class, 'approveRenewal'])
     ->middleware(['auth'])

@@ -30,9 +30,14 @@ class LicenseApplicationController extends Controller
         return auth()->user()?->role === 'pbt_admin';
     }
 
+    protected function isBendaharaAdmin(): bool
+    {
+        return auth()->user()?->role === 'bendahara_admin';
+    }
+
     protected function ensureAdmin(): void
     {
-        abort_unless($this->isBktAdmin() || $this->isPbtAdmin(), 403);
+        abort_unless($this->isBktAdmin() || $this->isPbtAdmin() || $this->isBendaharaAdmin(), 403);
     }
 
     protected function ensureBktAdmin(): void
@@ -621,6 +626,7 @@ class LicenseApplicationController extends Controller
                 'canApprove' => $this->isPbtAdmin() || $this->isBktAdmin(),
                 'canReject' => $this->isPbtAdmin(),
                 'canBlock' => $this->isBktAdmin(),
+                'canView' => $this->isPbtAdmin() || $this->isBktAdmin() || $this->isBendaharaAdmin(),
             ],
         ]);
     }
@@ -660,7 +666,28 @@ class LicenseApplicationController extends Controller
             'permissions' => [
                 'canApprove' => $this->isPbtAdmin(),
                 'canReject' => $this->isPbtAdmin(),
+                'canView' => $this->isPbtAdmin() || $this->isBktAdmin() || $this->isBendaharaAdmin(),
             ],
+        ]);
+    }
+
+    public function adminRenewalShow(LicenseRenewal $renewal)
+    {
+        $this->ensureAdmin();
+
+        $renewal->load(['license.hotel', 'user']);
+
+        if ($this->isPbtAdmin()) {
+            $this->ensurePbtAdminHasPbt();
+
+            abort_unless(
+                trim((string) $renewal->license?->hotel?->pbt_name) === $this->pbtAdminName(),
+                403
+            );
+        }
+
+        return Inertia::render('e-lesen/admin/LicenseRenewalShow', [
+            'renewal' => $renewal,
         ]);
     }
 

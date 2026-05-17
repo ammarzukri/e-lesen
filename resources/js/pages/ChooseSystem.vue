@@ -37,7 +37,7 @@ function logout() {
 const page = usePage();
 
 const fiSejahteraHref = computed(() =>
-    ['admin', 'bkt_admin', 'pbt_admin'].includes(page.props.auth?.user?.role ?? '')
+    ['admin', 'bkt_admin', 'pbt_admin', 'bendahara_admin'].includes(page.props.auth?.user?.role ?? '')
         ? '/fi-sejahtera/dashboard'
         : '/fi-sejahtera/apply',
 );

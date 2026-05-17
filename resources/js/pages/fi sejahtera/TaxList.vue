@@ -14,8 +14,10 @@ interface TaxSubmissionRow {
 	hotel_name?: string;
 	month: string;
 	year: number;
+	amount?: number;
 	payment_proof_url: string;
 	guest_report_url: string;
+	hotel_guest_list_url?: string | null;
 	submitted_at?: string;
 	status: string;
 	verified_at?: string;
@@ -23,10 +25,11 @@ interface TaxSubmissionRow {
 	remarks?: string;
 }
 
-const page = usePage<AppPageProps<{ submissions: TaxSubmissionRow[]; isAdmin: boolean }>>();
+const page = usePage<AppPageProps<{ submissions: TaxSubmissionRow[]; isAdmin: boolean; approverRole?: string | null }>>();
 
 const submissions = computed<TaxSubmissionRow[]>(() => ((page.props as any).submissions ?? []) as TaxSubmissionRow[]);
 const isAdmin = computed<boolean>(() => Boolean((page.props as any).isAdmin));
+const approverRole = computed<string>(() => String((page.props as any).approverRole ?? ''));
 const flashSuccess = computed<string>(() => ((page.props as any).flash?.success as string) ?? '');
 const flashError = computed<string>(() => ((page.props as any).flash?.error as string) ?? '');
 const hotelNameFilter = ref('');
@@ -77,6 +80,26 @@ function formatMonth(month: string) {
 }
 
 function formatStatusLabel(status: string) {
+	if (status === 'submitted') {
+		return 'Dihantar';
+	}
+
+	if (status === 'paid') {
+		return 'Bayaran Berjaya';
+	}
+
+	if (status === 'bkt_verified') {
+		return 'Lulus BKT (Menunggu Bendahara)';
+	}
+
+	if (status === 'payment_pending') {
+		return 'Menunggu Pembayaran';
+	}
+
+	if (status === 'bkt_verified') {
+		return 'bg-indigo-100 text-indigo-700';
+	}
+
 	if (status === 'verified') {
 		return 'Disahkan';
 	}
@@ -86,6 +109,26 @@ function formatStatusLabel(status: string) {
 	}
 
 	return status;
+}
+
+function statusBadgeClass(status: string) {
+	if (status === 'verified') {
+		return 'bg-green-100 text-green-700';
+	}
+
+	if (status === 'rejected') {
+		return 'bg-red-100 text-red-700';
+	}
+
+	if (status === 'paid') {
+		return 'bg-blue-100 text-blue-700';
+	}
+
+	if (status === 'payment_pending') {
+		return 'bg-orange-100 text-orange-700';
+	}
+
+	return 'bg-yellow-100 text-yellow-700';
 }
 
 function formatDate(dateTime?: string) {
@@ -106,12 +149,44 @@ function formatDate(dateTime?: string) {
 	return `${day}/${month}/${year}`;
 }
 
+function formatAmount(amount?: number) {
+	return new Intl.NumberFormat('ms-MY', {
+		style: 'currency',
+		currency: 'MYR',
+		minimumFractionDigits: 2,
+	}).format(Number(amount ?? 0));
+}
+
 function verifySubmission(id: number) {
 	rejectTargetId.value = null;
 	rejectForm.reset();
 	rejectForm.clearErrors();
 
 	rejectForm.patch(`/fi-sejahtera/tax/${id}/verify`);
+}
+
+function canApproveSubmission(submission: TaxSubmissionRow) {
+	if (!isAdmin.value) {
+		return false;
+	}
+
+	if (approverRole.value === 'bendahara_admin') {
+		return submission.status === 'bkt_verified';
+	}
+
+	return submission.status === 'submitted' || submission.status === 'rejected';
+}
+
+function canRejectSubmission(submission: TaxSubmissionRow) {
+	if (!isAdmin.value) {
+		return false;
+	}
+
+	if (approverRole.value === 'bendahara_admin') {
+		return submission.status === 'bkt_verified';
+	}
+
+	return submission.status === 'submitted' || submission.status === 'rejected';
 }
 
 function openReject(id: number) {
@@ -220,12 +295,14 @@ function resetFilter() {
 										<th class="p-2">Bil.</th>
 										<th class="p-2">Hotel</th>
 										<th class="p-2">Bulan/Tahun</th>
+										<th class="p-2">Jumlah (RM)</th>
 										<th class="p-2">Bukti Bayaran</th>
-										<th class="p-2">Laporan Tetamu</th>
+										<th class="p-2">Senarai Tetamu</th>
+										<th class="p-2">Senarai Tetamu (Sistem Hotel)</th>
 										<th class="p-2">Tarikh Hantar</th>
 										<th class="p-2">Status</th>
 										<th class="p-2">Pengesahan</th>
-										<th class="p-2">Remarks</th>
+										<th class="p-2">Catatan</th>
 										<th class="p-2">Tindakan</th>
 									</tr>
 								</thead>
@@ -234,21 +311,22 @@ function resetFilter() {
 										<td class="p-2">{{ index + 1 }}</td>
 										<td class="p-2">{{ submission.hotel_name ?? '-' }}</td>
 										<td class="p-2">{{ formatMonth(submission.month) }} {{ submission.year }}</td>
+										<td class="p-2">{{ formatAmount(submission.amount) }}</td>
 										<td class="p-2">
-											<a :href="submission.payment_proof_url" target="_blank" class="text-blue-600 hover:underline">Lihat Fail</a>
+											<a :href="submission.payment_proof_url" target="_blank" class="text-blue-600 hover:underline">Lihat</a>
 										</td>
 										<td class="p-2">
-											<a :href="submission.guest_report_url" target="_blank" class="text-blue-600 hover:underline">Lihat Fail</a>
+											<a :href="submission.guest_report_url" target="_blank" class="text-blue-600 hover:underline">Lihat</a>
+										</td>
+										<td class="p-2">
+											<a v-if="submission.hotel_guest_list_url" :href="submission.hotel_guest_list_url" target="_blank" class="text-blue-600 hover:underline">Lihat</a>
+											<span v-else>-</span>
 										</td>
 										<td class="p-2">{{ formatDate(submission.submitted_at) }}</td>
 										<td class="p-2">
 											<span
-												class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
-												:class="submission.status === 'verified'
-													? 'bg-green-100 text-green-700'
-													: submission.status === 'rejected'
-														? 'bg-red-100 text-red-700'
-														: 'bg-yellow-100 text-yellow-700'"
+												class="inline-flex items-center rounded-lg px-3 py-1 text-xs font-semibold"
+												:class="statusBadgeClass(submission.status)"
 											>
 													{{ formatStatusLabel(submission.status) }}
 											</span>
@@ -260,23 +338,25 @@ function resetFilter() {
 										<td class="p-2">{{ submission.remarks ?? '-' }}</td>
 										<td class="p-2">
 											<div v-if="rejectTargetId !== submission.id" class="flex gap-2">
-												<template v-if="isAdmin && submission.status !== 'verified'">
+												<template v-if="canApproveSubmission(submission) || canRejectSubmission(submission)">
 													<Button
 														type="button"
 														size="sm"
 														:disabled="rejectForm.processing"
+														v-if="canApproveSubmission(submission)"
 														@click="verifySubmission(submission.id)"
 													>
-														Verify
+														Lulus
 													</Button>
 													<Button
 														type="button"
 														size="sm"
 														variant="destructive"
 														:disabled="rejectForm.processing"
+														v-if="canRejectSubmission(submission)"
 														@click="openReject(submission.id)"
 													>
-														Reject
+														Tolak
 													</Button>
 												</template>
 												<a
@@ -308,7 +388,7 @@ function resetFilter() {
 										</td>
 									</tr>
 									<tr v-if="filteredSubmissions.length === 0">
-										<td colspan="10" class="p-3 text-sm text-muted-foreground">
+										<td colspan="12" class="p-3 text-sm text-muted-foreground">
 											Tiada rekod penghantaran cukai ditemui.
 										</td>
 									</tr>

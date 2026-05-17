@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Head, router, usePage } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
 import type { AppPageProps, BreadcrumbItem } from '@/types'
 
@@ -29,6 +29,7 @@ const props = defineProps<{
     permissions?: {
         canApprove?: boolean
         canReject?: boolean
+        canView?: boolean
     }
 }>()
 
@@ -51,6 +52,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const renewals = computed(() => props.renewals ?? [])
 const canApprove = computed(() => Boolean(props.permissions?.canApprove))
 const canReject = computed(() => Boolean(props.permissions?.canReject))
+const canView = computed(() => Boolean(props.permissions?.canView))
 const renewalFlash = computed(() => page.props.flash?.renewal)
 const selectedHotelName = ref<string>('')
 const appliedHotelName = ref<string>('')
@@ -352,6 +354,13 @@ onBeforeUnmount(() => {
                                 </td>
                                 <td class="border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm">
                                     <div class="flex flex-wrap gap-2">
+                                        <Link
+                                            v-if="canView"
+                                            :href="`/admin/license-renewals/${renewal.id}`"
+                                            class="px-3 py-1 rounded-lg bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800"
+                                        >
+                                            Lihat
+                                        </Link>
                                         <button
                                             v-if="canApprove"
                                             type="button"
