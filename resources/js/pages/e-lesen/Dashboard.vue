@@ -75,6 +75,17 @@ const applicationAlerts = computed(() => {
         const appLabel = `${appName} (${appRef})`;
         const remainingDays = daysUntil(app.expiry_date);
 
+        if (app.license_status === 'Disekat') {
+            alerts.push({
+                id: Number(`4${app.id}`),
+                tone: 'danger',
+                title: 'Lesen Disekat',
+                message: `Lesen ${appLabel} telah disekat. Sila buat pembayaran ke Perbendaharaan.`,
+            });
+
+            return;
+        }
+
         if (remainingDays === null) {
             return;
         }
@@ -84,7 +95,7 @@ const applicationAlerts = computed(() => {
                 id: Number(`2${app.id}`),
                 tone: 'danger',
                 title: 'Lesen Tamat Tempoh',
-                message: `${appLabel} telah tamat tempoh. Sila buat pembaharuan lesen segera.`,
+                message: `Lesen ${appLabel} telah tamat tempoh. Sila buat pembaharuan lesen segera.`,
             });
 
             return;

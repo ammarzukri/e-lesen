@@ -596,6 +596,8 @@ onBeforeUnmount(() => {
                                         class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
                                         :class="application.license_status === 'Aktif'
                                             ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                            : application.license_status === 'Disekat'
+                                                ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
                                             : application.license_status === 'Tamat Tempoh'
                                                 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
                                                 : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100'"
@@ -628,7 +630,7 @@ onBeforeUnmount(() => {
                                             Lulus
                                         </button>
                                         <button
-                                            v-if="isBktAdmin && canApprove && application.status === 'Disekat'"
+                                            v-if="isBktAdmin && canApprove && application.license_status === 'Disekat'"
                                             type="button"
                                             class="px-3 py-1 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
                                             @click="approve(application.id)"
@@ -636,7 +638,7 @@ onBeforeUnmount(() => {
                                             Lulus
                                         </button>
                                         <button
-                                            v-if="isBktAdmin && canBlock && application.status !== 'Disekat' && application.status !== 'Ditolak' && application.fi_sejahtera_status === 'Belum Dibayar'"
+                                            v-if="isBktAdmin && canBlock && !!application.license_status && application.license_status !== 'Disekat' && application.status !== 'Ditolak' && application.fi_sejahtera_status === 'Belum Dibayar'"
                                             type="button"
                                             class="px-3 py-1 rounded-lg bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600"
                                             @click="block(application.id)"

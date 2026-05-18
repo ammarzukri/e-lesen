@@ -763,7 +763,14 @@ class LicenseApplicationController extends Controller
         if ($this->isPbtAdmin()) {
             $this->authorizePbtAdminApplication($application);
         } elseif ($this->isBktAdmin()) {
-            abort_unless($application->status === 'Disekat', 403);
+            $application->loadMissing('hotel.license');
+            abort_unless($application->hotel?->license?->status === 'Disekat', 403);
+
+            $application->hotel->license->update([
+                'status' => 'Aktif',
+            ]);
+
+            return redirect()->back();
         } else {
             abort(403);
         }
@@ -782,7 +789,14 @@ class LicenseApplicationController extends Controller
     {
         $this->ensureBktAdmin();
 
-        $application->update([
+        $application->loadMissing('hotel.license');
+        $license = $application->hotel?->license;
+
+        if (! $license) {
+            return redirect()->back()->with('error', 'Lesen tidak ditemui untuk disekat.');
+        }
+
+        $license->update([
             'status' => 'Disekat',
         ]);
 
