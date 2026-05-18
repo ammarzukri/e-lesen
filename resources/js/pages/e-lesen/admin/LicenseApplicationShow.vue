@@ -29,6 +29,7 @@ type LicenseInfo = {
     license_number?: string;
     start_date?: string;
     expiry_date?: string;
+    status?: string;
 };
 
 type HotelInfo = {
@@ -118,6 +119,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 const statusLabel = computed(() => props.application.status || 'Dalam Proses');
 const canTakeAction = computed(() => statusLabel.value === 'Dalam Proses');
 const licenseInfo = computed(() => props.application.hotel?.license);
+const licenseStatusLabel = computed(() => licenseInfo.value?.status || '-');
 
 const dateFormatter = new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
@@ -167,6 +169,22 @@ function formatCurrency(value?: string | number) {
     const cents = Number(value);
     if (Number.isNaN(cents)) return '-';
     return (cents / 100).toFixed(2);
+}
+
+function licenseStatusBadgeClass(status?: string) {
+    if (status === 'Aktif') {
+        return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    }
+
+    if (status === 'Tamat Tempoh') {
+        return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    }
+
+    if (status === 'Disekat') {
+        return 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300';
+    }
+
+    return 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100';
 }
 
 function fileUrlById(id?: number) {
@@ -237,14 +255,10 @@ function reject() {
                     <div
                         :class="[
                             'px-3 py-1 rounded-full text-sm font-semibold',
-                            statusLabel === 'Diluluskan'
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                : statusLabel === 'Ditolak'
-                                ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100',
+                            licenseStatusBadgeClass(licenseInfo?.status),
                         ]"
                     >
-                        {{ statusLabel }}
+                        {{ licenseStatusLabel }}
                     </div>
                 </div>
 

@@ -21,23 +21,96 @@ const recentApplications = computed(() => (page.props as any).recentApplications
 const approvedApplications = computed(() =>
     recentApplications.value.filter((app: any) => app?.payment_status === 'Berjaya'),
 );
-const applicationAlerts = computed(() =>
+const dismissedNotificationIds = ref<number[]>([]);
+
+function startOfDay(date: Date) {
+    const normalized = new Date(date);
+    normalized.setHours(0, 0, 0, 0);
+    return normalized;
+}
+
+function daysUntil(dateString?: string | null) {
+    if (!dateString) {
+        return null;
+    }
+
+    const target = startOfDay(new Date(dateString));
+
+    if (Number.isNaN(target.getTime())) {
+        return null;
+    }
+
+    const today = startOfDay(new Date());
+    const diffMs = target.getTime() - today.getTime();
+
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+const applicationAlerts = computed(() => {
+    const alerts: Array<{
+        id: number;
+        tone: 'warning' | 'danger';
+        title: string;
+        message: string;
+    }> = [];
+
     recentApplications.value
-    .filter((app: any) => app.status === 'Diluluskan' && app.payment_status !== 'Berjaya')
-    .map((app: any) => {
+        .filter((app: any) => app.status === 'Diluluskan' && app.payment_status !== 'Berjaya')
+        .forEach((app: any) => {
+            const appRef = app.license_number ? `No Lesen ${app.license_number}` : `Permohonan #${app.id}`;
+            const appName = app.hotel_name ?? app.company_name ?? 'Permohonan tanpa nama';
+            const appLabel = `${appName} (${appRef})`;
+
+            alerts.push({
+                id: Number(`1${app.id}`),
+                tone: 'warning',
+                title: 'Perlu Bayaran',
+                message: `${appLabel} telah diluluskan tetapi masih memerlukan bayaran.`,
+            });
+        });
+
+    approvedApplications.value.forEach((app: any) => {
         const appRef = app.license_number ? `No Lesen ${app.license_number}` : `Permohonan #${app.id}`;
         const appName = app.hotel_name ?? app.company_name ?? 'Permohonan tanpa nama';
         const appLabel = `${appName} (${appRef})`;
+        const remainingDays = daysUntil(app.expiry_date);
 
-        return {
-            id: app.id,
-            tone: 'warning',
-            title: 'Perlu Bayaran',
-            message: `${appLabel} telah diluluskan tetapi masih memerlukan bayaran.`,
-        };
-    }),
-);
+        if (remainingDays === null) {
+            return;
+        }
+
+        if (remainingDays < 0 || app.license_status === 'Tamat Tempoh') {
+            alerts.push({
+                id: Number(`2${app.id}`),
+                tone: 'danger',
+                title: 'Lesen Tamat Tempoh',
+                message: `${appLabel} telah tamat tempoh. Sila buat pembaharuan lesen segera.`,
+            });
+
+            return;
+        }
+
+        if (remainingDays <= 7) {
+            alerts.push({
+                id: Number(`3${app.id}`),
+                tone: 'warning',
+                title: 'Lesen Akan Tamat Tempoh',
+                message: `${appLabel} akan tamat tempoh dalam ${remainingDays} hari. Sila buat pembaharuan awal.`,
+            });
+        }
+    });
+
+    return alerts.filter((alert) => !dismissedNotificationIds.value.includes(alert.id));
+});
 const selectedApplication = ref<any | null>(null);
+
+function dismissNotification(id: number) {
+    if (dismissedNotificationIds.value.includes(id)) {
+        return;
+    }
+
+    dismissedNotificationIds.value = [...dismissedNotificationIds.value, id];
+}
 
 function openDetails(app: any) {
     selectedApplication.value = app;
@@ -60,6 +133,22 @@ function formatDate(dt?: string | null) {
     } catch {
         return dt;
     }
+}
+
+function licenseStatusBadgeClass(status?: string | null) {
+    if (status === 'Aktif') {
+        return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    }
+
+    if (status === 'Tamat Tempoh') {
+        return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    }
+
+    if (status === 'Disekat') {
+        return 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300';
+    }
+
+    return 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100';
 }
 </script>
 
@@ -86,13 +175,23 @@ function formatDate(dt?: string | null) {
                     <div
                         v-for="alert in applicationAlerts"
                         :key="alert.id"
-                        class="rounded-lg border px-3 py-2 text-sm"
+                        class="flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
                         :class="[
                             alert.tone === 'warning' && 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-200',
+                            alert.tone === 'danger' && 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-900/20 dark:text-red-200',
                         ]"
                     >
-                        <p class="font-semibold">{{ alert.title }}</p>
-                        <p>{{ alert.message }}</p>
+                        <div>
+                            <p class="font-semibold">{{ alert.title }}</p>
+                            <p>{{ alert.message }}</p>
+                        </div>
+                        <button
+                            type="button"
+                            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold hover:bg-black/10 dark:hover:bg-white/10"
+                            @click="dismissNotification(alert.id)"
+                        >
+                            X
+                        </button>
                     </div>
                 </div>
 
@@ -122,18 +221,22 @@ function formatDate(dt?: string | null) {
                             <p class="mb-3 truncate text-sm font-medium text-slate-700 dark:text-slate-200">{{ user?.name ?? app.company_name ?? '-' }}</p>
 
                             <p class="mb-1 text-xs text-muted-foreground">Status</p>
-                            <span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                                {{ app.status ?? '-' }}
+                            <span
+                                class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
+                                :class="licenseStatusBadgeClass(app.license_status)"
+                            >
+                                {{ app.license_status ?? '-' }}
                             </span>
                         </button>
 
                         <Link
                             v-if="!isStaff"
                             href="/license/apply"
-                            class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white transition hover:bg-blue-700"
-                            title="Tambah Lesen"
+                            class="flex h-40 w-40 shrink-0 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-blue-300 bg-blue-50 text-blue-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-100 hover:shadow-md dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
+                            title="Mohon Lesen Baru"
                         >
-                            +
+                            <span class="text-4xl font-bold leading-none">+</span>
+                            <span class="mt-3 text-center text-xs font-semibold">Mohon Lesen Baru</span>
                         </Link>
                     </div>
                 </div>
@@ -182,7 +285,12 @@ function formatDate(dt?: string | null) {
                             </div>
                             <div>
                                 <p class="text-xs text-muted-foreground">Status Lesen</p>
-                                <p class="font-semibold">{{ selectedApplication.license_status || '-' }}</p>
+                                <span
+                                    class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold"
+                                    :class="licenseStatusBadgeClass(selectedApplication.license_status)"
+                                >
+                                    {{ selectedApplication.license_status || '-' }}
+                                </span>
                             </div>
                             <div>
                                 <p class="text-xs text-muted-foreground">PBT</p>

@@ -294,7 +294,7 @@ function formatDate(dateString?: string): string {
 														: 'bg-slate-400 cursor-not-allowed pointer-events-none',
 												]"
 											>
-												Baharui Lesen
+												Perbaharui Lesen
 											</Link>
 											<p v-if="isBlockedStatus(application)" class="text-xs text-slate-600 dark:text-slate-400">
 												Anda mestilah membayar cukai Fi Sejahtera untuk membaharui lesen

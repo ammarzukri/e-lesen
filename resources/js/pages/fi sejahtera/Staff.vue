@@ -513,7 +513,7 @@ function resetFilters() {
                                 <DialogDescription>Lengkapkan maklumat staf baharu.</DialogDescription>
                             </DialogHeader>
 
-                            <form class="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2" @submit.prevent="submitStaff">
+                            <form class="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 [&_input:not([type='radio'])]:mt-1 [&_select]:mt-1" @submit.prevent="submitStaff">
                                 <div>
                                     <Label for="add_hotel_id">Nama Hotel</Label>
                                     <select
@@ -713,7 +713,7 @@ function resetFilters() {
                                 <DialogDescription>Kemas kini maklumat staf.</DialogDescription>
                             </DialogHeader>
 
-                            <form class="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2" @submit.prevent="submitEditStaff">
+                            <form class="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 [&_input:not([type='radio'])]:mt-1 [&_select]:mt-1" @submit.prevent="submitEditStaff">
                                 <div>
                                     <Label for="edit_hotel_id">Nama Hotel</Label>
                                     <select

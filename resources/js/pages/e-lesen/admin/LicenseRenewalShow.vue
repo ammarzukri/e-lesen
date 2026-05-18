@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
@@ -40,6 +40,19 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const statusLabel = computed(() => props.renewal.status || 'Dalam Proses');
+const canTakeAction = computed(() => statusLabel.value === 'Dalam Proses');
+
+function renewalStatusBadgeClass(status?: string) {
+    if (status === 'Diluluskan') {
+        return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    }
+
+    if (status === 'Ditolak') {
+        return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300';
+    }
+
+    return 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100';
+}
 
 const dateFormatter = new Intl.DateTimeFormat('ms-MY', {
     day: '2-digit',
@@ -84,6 +97,14 @@ function formatAmount(value?: number | string) {
         minimumFractionDigits: 2,
     }).format(numeric / 100);
 }
+
+function approve() {
+    router.post(`/admin/license-renewals/${props.renewal.id}/approve`);
+}
+
+function reject() {
+    router.post(`/admin/license-renewals/${props.renewal.id}/reject`);
+}
 </script>
 
 <template>
@@ -92,7 +113,7 @@ function formatAmount(value?: number | string) {
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="w-full h-full flex flex-col p-6 bg-white dark:bg-black rounded-xl shadow dark:shadow-black/30">
             <div class="flex-1 overflow-auto space-y-6">
-                <div class="flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center justify-between flex-wrap gap-4">
                     <div>
                         <h2 class="text-xl font-bold text-slate-900 dark:text-slate-100">Butiran Pembaharuan Lesen</h2>
                         <p class="text-sm text-slate-600 dark:text-slate-400">Paparan maklumat pembaharuan lesen secara terperinci.</p>
@@ -100,80 +121,132 @@ function formatAmount(value?: number | string) {
                     <div
                         :class="[
                             'px-3 py-1 rounded-full text-sm font-semibold',
-                            statusLabel === 'Diluluskan'
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
-                                : statusLabel === 'Ditolak'
-                                    ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                                    : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100',
+                            renewalStatusBadgeClass(statusLabel),
                         ]"
                     >
                         {{ statusLabel }}
                     </div>
                 </div>
 
-                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-4">
-                    <div class="grid gap-3 md:grid-cols-2">
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">ID Pembaharuan</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">#{{ renewal.id }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">No. Lesen</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ renewal.license?.license_number || '-' }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Hotel</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ renewal.license?.hotel?.name || '-' }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Syarikat</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ renewal.license?.hotel?.company_name || '-' }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Pemohon</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ renewal.user?.name || '-' }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ renewal.user?.email || '-' }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">PBT</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ renewal.license?.hotel?.pbt_name || '-' }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Tarikh Tamat Semasa</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ formatDate(renewal.current_expiry_date) }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Tarikh Tamat Baharu</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ formatDate(renewal.renewed_until_date) }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Status Bayaran</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ renewal.payment_status || '-' }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Jumlah: {{ formatAmount(renewal.payment_amount) }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Tarikh Bayaran</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ formatDateTime(renewal.payment_paid_at) }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Dicipta Pada</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ formatDateTime(renewal.created_at) }}</p>
-                        </div>
-                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Tindakan Admin</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Diluluskan: {{ formatDateTime(renewal.approved_at) }}</p>
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Ditolak: {{ formatDateTime(renewal.rejected_at) }}</p>
-                        </div>
-                    </div>
+                <div class="flex flex-wrap gap-3">
+                    <Link
+                        class="px-3 py-1 rounded-lg bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800"
+                        href="/admin/license-renewals"
+                    >
+                        ← Kembali
+                    </Link>
                 </div>
 
-                <div class="flex items-center justify-end">
-                    <Link
-                        href="/admin/license-renewals"
-                        class="px-4 py-2 rounded-lg bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800"
+                <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-6 space-y-8">
+                    <section>
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Maklumat Pembaharuan</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">ID Pembaharuan</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">#{{ renewal.id }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">No. Lesen</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ renewal.license?.license_number || '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Hotel</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ renewal.license?.hotel?.name || '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Syarikat</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ renewal.license?.hotel?.company_name || '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">PBT</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ renewal.license?.hotel?.pbt_name || '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Dicipta Pada</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ formatDateTime(renewal.created_at) }}</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Maklumat Pemohon</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Pemohon</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ renewal.user?.name || '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Email</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ renewal.user?.email || '-' }}</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Tempoh Lesen</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Tarikh Tamat Semasa</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ formatDate(renewal.current_expiry_date) }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Tarikh Tamat Baharu</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ formatDate(renewal.renewed_until_date) }}</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Maklumat Pembayaran</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Status Bayaran</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ renewal.payment_status || '-' }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Jumlah Dibayar</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ formatAmount(renewal.payment_amount) }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Tarikh Bayaran</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ formatDateTime(renewal.payment_paid_at) }}</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">Tindakan Admin</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Diluluskan Pada</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ formatDateTime(renewal.approved_at) }}</div>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">Ditolak Pada</div>
+                                <div class="text-md text-slate-900 dark:text-slate-100">{{ formatDateTime(renewal.rejected_at) }}</div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <div
+                    v-if="canTakeAction"
+                    class="flex flex-wrap gap-3 justify-end"
+                >
+                    <button
+                        type="button"
+                        class="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700"
+                        @click="approve"
                     >
-                        Kembali
-                    </Link>
+                        Lulus
+                    </button>
+                    <button
+                        type="button"
+                        class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+                        @click="reject"
+                    >
+                        Tolak
+                    </button>
                 </div>
             </div>
         </div>
