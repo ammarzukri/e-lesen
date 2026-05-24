@@ -323,6 +323,21 @@ Route::patch('/license/applicant-info', [LicenseApplicationController::class, 'u
     ->middleware(['auth'])
     ->name('license.applicant-info.update');
 
+Route::get('/license/process-fee/start', [LicenseApplicationController::class, 'startProcessFeePayment'])
+    ->middleware(['auth'])
+    ->name('license.process-fee.start');
+
+Route::get('/license/process-fee/status', [LicenseApplicationController::class, 'processFeeStatus'])
+    ->middleware(['auth'])
+    ->name('license.process-fee.status');
+
+Route::get('/license/process-fee/return', [LicenseApplicationController::class, 'handleProcessFeeReturn'])
+    ->middleware(['auth'])
+    ->name('license.process-fee.return');
+
+Route::post('/license/process-fee/callback', [LicenseApplicationController::class, 'handleProcessFeeCallback'])
+    ->name('license.process-fee.callback');
+
 Route::get('/license/payment/start', [LicenseApplicationController::class, 'startPayment'])
     ->middleware(['auth'])
     ->name('license.payment.start');

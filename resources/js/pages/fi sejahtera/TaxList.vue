@@ -219,7 +219,7 @@ function resetFilter() {
 </script>
 
 <template>
-	<Head title="Senarai Cukai" />
+	<Head title="Senarai Pembayaran" />
 
 	<div class="flex min-h-screen bg-muted/30">
 		<FiSejahteraSidebar />
@@ -233,9 +233,9 @@ function resetFilter() {
 					
 					<!-- Title -->
 					<div>
-						<h1 class="text-2xl font-bold text-foreground">Senarai Cukai</h1>
+						<h1 class="text-2xl font-bold text-foreground">Senarai Pembayaran</h1>
 						<p class="text-sm text-muted-foreground">
-							Status penghantaran bukti pembayaran cukai dan laporan tetamu.
+							Status penghantaran bukti pembayaran dan laporan tetamu.
 						</p>
 					</div>
 

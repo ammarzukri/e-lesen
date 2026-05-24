@@ -68,4 +68,9 @@ class LicenseApplication extends Model
     {
         return $this->hasOne(Hotel::class, 'license_application_id');
     }
+
+    public function processFeePayment()
+    {
+        return $this->hasOne(LicenseProcessFeePayment::class, 'license_application_id');
+    }
 }

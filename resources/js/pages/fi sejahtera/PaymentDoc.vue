@@ -154,6 +154,10 @@ function onHotelSystemGuestListChange(submissionId: number, event: Event) {
     selectedFiles.value[submissionId] = input.files?.[0] ?? null;
 }
 
+function selectedFileName(submissionId: number) {
+    return selectedFiles.value[submissionId]?.name ?? '';
+}
+
 function canSubmitDocs(submission: PaymentSubmissionRow) {
     return submission.payment_status === 'Berjaya' && (submission.status === 'paid' || submission.status === 'rejected');
 }
@@ -189,7 +193,12 @@ function submitPaymentDoc(submissionId: number) {
             <FiSejahteraNavbar />
 
             <main class="flex-1 space-y-6 p-6">
-                <h1 class="text-2xl font-bold text-foreground">Senarai Pembayaran</h1>
+                <div>
+                    <h1 class="text-2xl font-bold text-foreground">Hantar Bukti Pembayaran</h1>
+                    <p class="text-sm text-muted-foreground">
+                        Hantar bukti pembayaran kepada Perbendaharaan.
+                    </p>
+                </div>
 
                 <div
                     v-if="flashSuccess"
@@ -216,14 +225,14 @@ function submitPaymentDoc(submissionId: number) {
                                     <tr class="text-sm text-muted-foreground">
                                         <th class="p-2">Bil.</th>
                                         <th class="p-2">Hotel</th>
-                                        <th class="p-2">Bulan & Tahun</th>
-                                        <th class="p-2">Payment Status</th>
-                                        <th class="p-2">Total Amount</th>
-                                        <th class="p-2">Receipt</th>
-                                        <th class="p-2">Guest List</th>
-                                        <th class="p-2">Guest List (Hotel System)</th>
+                                        <th class="p-2">Bulan/Tahun</th>
+                                        <th class="p-2">Status Bayaran</th>
+                                        <th class="p-2">Jumlah (RM)</th>
+                                        <th class="p-2">Resit</th>
+                                        <th class="p-2">Senarai Tetamu</th>
+                                        <th class="p-2">Senarai Tetamu (Sistem Hotel)</th>
                                         <th class="p-2">Status</th>
-                                        <th class="p-2">Action</th>
+                                        <th class="p-2">Tindakan</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -280,9 +289,16 @@ function submitPaymentDoc(submissionId: number) {
                                                     v-if="canSubmitDocs(submission)"
                                                     type="file"
                                                     accept=".pdf,.jpg,.jpeg,.png"
-                                                    class="w-64 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                                                    class="block w-full max-w-xs cursor-pointer rounded-lg border border-slate-300 bg-slate-50 p-2 text-xs text-slate-700 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:border-slate-400 hover:bg-slate-100 file:hover:bg-slate-900"
                                                     @change="onHotelSystemGuestListChange(submission.id, $event)"
                                                 />
+
+                                                <p
+                                                    v-if="selectedFileName(submission.id)"
+                                                    class="max-w-xs truncate text-xs text-slate-600"
+                                                >
+                                                    Dipilih: {{ selectedFileName(submission.id) }}
+                                                </p>
                                             </div>
                                         </td>
                                         <td class="p-2">
@@ -301,7 +317,7 @@ function submitPaymentDoc(submissionId: number) {
                                                     :disabled="uploadForm.processing || !selectedFiles[submission.id]"
                                                     @click="submitPaymentDoc(submission.id)"
                                                 >
-                                                    {{ uploadForm.processing && uploadingSubmissionId === submission.id ? 'Menghantar...' : 'Submit Payment Doc' }}
+                                                    {{ uploadForm.processing && uploadingSubmissionId === submission.id ? 'Menghantar...' : 'Hantar' }}
                                                 </Button>
                                                 <p
                                                     v-if="uploadForm.errors.hotel_guest_list && uploadingSubmissionId === submission.id"

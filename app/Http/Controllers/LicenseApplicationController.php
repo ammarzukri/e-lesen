@@ -9,15 +9,19 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use App\Models\Hotel;
 use App\Models\HotelStaff;
 use App\Models\License;
 use App\Models\LicenseApplication;
 use App\Models\LicenseDocument;
+use App\Models\LicenseProcessFeePayment;
 use App\Models\LicenseRenewal;
 
 class LicenseApplicationController extends Controller
 {
+    protected int $processFeeAmountInCents = 10000;
+
     protected function isBktAdmin(): bool
     {
         $role = auth()->user()?->role;
@@ -92,6 +96,14 @@ class LicenseApplicationController extends Controller
         $this->ensureNotStaff();
 
         $user = auth()->user();
+        $processFeePayment = $this->latestUnconsumedProcessFeePayment(auth()->id());
+
+        if ($processFeePayment && $processFeePayment->payment_status === 'Dalam Proses') {
+            $this->syncProcessFeeStatusFromToyyibpay($processFeePayment, false);
+            $processFeePayment->refresh();
+        }
+
+        $processFeePayload = $this->formatProcessFeePaymentPayload($processFeePayment);
 
         return Inertia::render('e-lesen/lesen/Create', [
             'initialApplicantInfo' => [
@@ -113,7 +125,155 @@ class LicenseApplicationController extends Controller
                 'phone_number' => $user?->phone_number,
                 'email' => $user?->email,
             ],
+            'processFeePayment' => [
+                'status' => $processFeePayload['status'],
+                'paid' => $processFeePayload['paid'],
+                'amount' => $processFeePayload['amount'],
+                'bill_code' => $processFeePayload['bill_code'],
+                'paid_at' => $processFeePayload['paid_at'],
+            ],
         ]);
+    }
+
+    public function startProcessFeePayment(Request $request)
+    {
+        $this->ensureNotStaff();
+
+        $existingPaid = LicenseProcessFeePayment::query()
+            ->where('user_id', auth()->id())
+            ->whereNull('consumed_at')
+            ->where('payment_status', 'Berjaya')
+            ->latest('id')
+            ->first();
+
+        if ($existingPaid) {
+            return response()->json([
+                'status' => 'paid',
+                'paid' => true,
+                'amount' => (int) ($existingPaid->payment_amount ?? $this->processFeeAmountInCents),
+                'bill_code' => $existingPaid->payment_billcode,
+                'paid_at' => optional($existingPaid->payment_paid_at)?->toDateTimeString(),
+            ]);
+        }
+
+        $baseUrl = $this->toyyibpayBaseUrl();
+        $secretKey = config('services.toyyibpay.key') ?? env('TOYYIBPAY_API_KEY');
+        $categoryCode = config('services.toyyibpay.category_code') ?? env('TOYYIBPAY_CATEGORY_CODE');
+
+        if (! $secretKey || ! $categoryCode) {
+            return response()->json([
+                'message' => 'Tetapan pembayaran tidak lengkap. Sila hubungi pentadbir.',
+            ], 422);
+        }
+
+        $user = auth()->user();
+        $externalReference = 'license-process-fee-'.auth()->id().'-'.Str::uuid();
+        $response = Http::asForm()->post($baseUrl.'/index.php/api/createBill', [
+            'userSecretKey' => $secretKey,
+            'categoryCode' => $categoryCode,
+            'billName' => 'Bayaran Fi Proses Lesen',
+            'billDescription' => 'Bayaran fi proses permohonan lesen',
+            'billPriceSetting' => 1,
+            'billPayorInfo' => 1,
+            'billAmount' => $this->processFeeAmountInCents,
+            'billReturnUrl' => route('license.process-fee.return'),
+            'billCallbackUrl' => route('license.process-fee.callback'),
+            'billExternalReferenceNo' => $externalReference,
+            'billTo' => $user?->name ?? 'Pemohon',
+            'billEmail' => $user?->email ?? 'no-reply@example.com',
+            'billPhone' => $user?->phone_number ?? '',
+        ]);
+
+        if (! $response->successful()) {
+            return response()->json([
+                'message' => 'Gagal memulakan pembayaran ToyyibPay. Sila cuba lagi.',
+            ], 422);
+        }
+
+        $payload = $response->json();
+        $billCode = data_get($payload, '0.BillCode') ?? data_get($payload, 'BillCode');
+
+        if (! $billCode) {
+            return response()->json([
+                'message' => 'Gagal mendapatkan kod pembayaran ToyyibPay.',
+            ], 422);
+        }
+
+        LicenseProcessFeePayment::create([
+            'user_id' => auth()->id(),
+            'payment_status' => 'Dalam Proses',
+            'payment_amount' => $this->processFeeAmountInCents,
+            'payment_billcode' => (string) $billCode,
+            'payment_external_reference' => $externalReference,
+            'payment_attempted_at' => now(),
+        ]);
+
+        return response()->json([
+            'status' => 'pending',
+            'paid' => false,
+            'amount' => $this->processFeeAmountInCents,
+            'bill_code' => (string) $billCode,
+            'payment_url' => $baseUrl.'/'.(string) $billCode,
+        ]);
+    }
+
+    public function processFeeStatus(Request $request)
+    {
+        $this->ensureNotStaff();
+
+        $payment = $this->latestUnconsumedProcessFeePayment(auth()->id());
+
+        if ($payment && $payment->payment_status === 'Dalam Proses') {
+            $this->syncProcessFeeStatusFromToyyibpay($payment, false);
+            $payment->refresh();
+        }
+
+        return response()->json($this->formatProcessFeePaymentPayload($payment));
+    }
+
+    public function handleProcessFeeReturn(Request $request)
+    {
+        $this->ensureNotStaff();
+
+        $billCode = (string) ($request->query('billcode') ?? $request->query('billCode') ?? '');
+
+        if ($billCode !== '') {
+            $payment = LicenseProcessFeePayment::query()
+                ->where('user_id', auth()->id())
+                ->where('payment_billcode', $billCode)
+                ->latest('id')
+                ->first();
+
+            if ($payment) {
+                $this->syncProcessFeeStatusFromToyyibpay($payment, true);
+            }
+        }
+
+        return redirect()->route('license.apply', [
+            'process_fee_return' => 1,
+        ]);
+    }
+
+    public function handleProcessFeeCallback(Request $request)
+    {
+        $billCode = (string) ($request->input('billcode') ?? $request->input('billCode') ?? '');
+
+        if ($billCode === '') {
+            return response()->json(['status' => 'missing-billcode'], 400);
+        }
+
+        $payment = LicenseProcessFeePayment::query()
+            ->where('payment_billcode', $billCode)
+            ->latest('id')
+            ->first();
+
+        if (! $payment) {
+            return response()->json(['status' => 'not-found'], 404);
+        }
+
+        $this->syncProcessFeeStatusFromToyyibpay($payment, false);
+
+        return response()->json(['status' => 'ok']);
     }
 
     public function updateApplicantInfo(Request $request)
@@ -571,6 +731,85 @@ class LicenseApplicationController extends Controller
         return $isSuccess;
     }
 
+    protected function syncProcessFeeStatusFromToyyibpay(LicenseProcessFeePayment $payment, bool $markFailedWhenNotSuccess = false): bool
+    {
+        $billCode = (string) $payment->payment_billcode;
+        if ($billCode === '') {
+            return false;
+        }
+
+        $baseUrl = $this->toyyibpayBaseUrl();
+
+        $response = Http::asForm()->post($baseUrl.'/index.php/api/getBillTransactions', [
+            'billCode' => $billCode,
+        ]);
+
+        $payload = $response->json();
+        $paymentStatus = data_get($payload, '0.billpaymentStatus')
+            ?? data_get($payload, 'billpaymentStatus');
+
+        $isSuccess = in_array((string) $paymentStatus, ['1', 'success', 'SUCCESS'], true);
+
+        if ($isSuccess) {
+            $payment->update([
+                'payment_status' => 'Berjaya',
+                'payment_paid_at' => now(),
+            ]);
+
+            return true;
+        }
+
+        if ($markFailedWhenNotSuccess) {
+            $payment->update([
+                'payment_status' => 'Gagal',
+                'payment_paid_at' => null,
+            ]);
+        }
+
+        return false;
+    }
+
+    protected function latestUnconsumedProcessFeePayment(?int $userId): ?LicenseProcessFeePayment
+    {
+        if (! $userId) {
+            return null;
+        }
+
+        return LicenseProcessFeePayment::query()
+            ->where('user_id', $userId)
+            ->whereNull('consumed_at')
+            ->latest('id')
+            ->first();
+    }
+
+    protected function formatProcessFeePaymentPayload(?LicenseProcessFeePayment $payment): array
+    {
+        if (! $payment) {
+            return [
+                'status' => 'unpaid',
+                'paid' => false,
+                'amount' => $this->processFeeAmountInCents,
+                'bill_code' => null,
+                'paid_at' => null,
+            ];
+        }
+
+        $status = match ($payment->payment_status) {
+            'Berjaya' => 'paid',
+            'Dalam Proses' => 'pending',
+            'Gagal' => 'failed',
+            default => 'unpaid',
+        };
+
+        return [
+            'status' => $status,
+            'paid' => $payment->payment_status === 'Berjaya',
+            'amount' => (int) ($payment->payment_amount ?? $this->processFeeAmountInCents),
+            'bill_code' => $payment->payment_billcode,
+            'paid_at' => optional($payment->payment_paid_at)?->toDateTimeString(),
+        ];
+    }
+
     protected function toyyibpayBaseUrl(): string
     {
         return config('services.toyyibpay.sandbox') ? 'https://dev.toyyibpay.com' : 'https://toyyibpay.com';
@@ -850,9 +1089,56 @@ class LicenseApplicationController extends Controller
             'documents' => ['nullable', 'array'],
             'documents.*.document_type' => ['nullable', 'string'],
             'documents.*.file' => ['nullable', 'file', 'max:10240'],
+            'processing_fee' => ['required', 'array'],
+            'processing_fee.paid' => ['required', 'boolean'],
+            'processing_fee.bill_code' => ['nullable', 'string'],
         ]);
 
-        DB::transaction(function () use ($request) {
+        $requestBillCode = (string) $request->input('processing_fee.bill_code', '');
+        $requestProcessFeePaid = $request->boolean('processing_fee.paid');
+
+        if ($requestProcessFeePaid !== true || $requestBillCode === '') {
+            throw ValidationException::withMessages([
+                'processing_fee' => 'Bayaran fi proses belum berjaya. Sila lengkapkan bayaran RM100 terlebih dahulu.',
+            ]);
+        }
+
+        $processFeePayment = LicenseProcessFeePayment::query()
+            ->where('user_id', auth()->id())
+            ->where('payment_billcode', $requestBillCode)
+            ->whereNull('consumed_at')
+            ->latest('id')
+            ->first();
+
+        if (! $processFeePayment) {
+            throw ValidationException::withMessages([
+                'processing_fee' => 'Maklumat bayaran fi proses tidak sah. Sila buat bayaran semula.',
+            ]);
+        }
+
+        if ($processFeePayment->payment_status === 'Dalam Proses') {
+            $this->syncProcessFeeStatusFromToyyibpay($processFeePayment, false);
+            $processFeePayment->refresh();
+        }
+
+        if ($processFeePayment->payment_status !== 'Berjaya') {
+            throw ValidationException::withMessages([
+                'processing_fee' => 'Bayaran fi proses belum berjaya. Sila lengkapkan bayaran RM100 terlebih dahulu.',
+            ]);
+        }
+
+        DB::transaction(function () use ($request, $processFeePayment) {
+            $lockedProcessFeePayment = LicenseProcessFeePayment::query()
+                ->whereKey($processFeePayment->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $lockedProcessFeePayment || $lockedProcessFeePayment->payment_status !== 'Berjaya' || $lockedProcessFeePayment->consumed_at) {
+                throw ValidationException::withMessages([
+                    'processing_fee' => 'Bayaran fi proses tidak sah atau telah digunakan.',
+                ]);
+            }
+
             $applicant = $request->input('applicant_info', []);
             $company = $request->input('company_info', []);
 
@@ -946,6 +1232,11 @@ class LicenseApplicationController extends Controller
                     'upload_at' => now(),
                 ]);
             }
+
+            $lockedProcessFeePayment->update([
+                'license_application_id' => $licenseApplication->id,
+                'consumed_at' => now(),
+            ]);
         });
 
         return redirect()->route('license.status');

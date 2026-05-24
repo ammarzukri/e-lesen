@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onBeforeUnmount } from 'vue'
+import { ref, watch, computed, onBeforeUnmount, onMounted } from 'vue'
 import { Head, router } from '@inertiajs/vue3'
 import AppLayout from '@/layouts/AppLayout.vue'
 import { dashboard } from '@/routes'
@@ -28,6 +28,13 @@ interface ApplicantInfo {
 
 const props = defineProps<{
   initialApplicantInfo?: Partial<ApplicantInfo> | null
+  processFeePayment?: {
+    status?: string | null
+    paid?: boolean | null
+    amount?: number | null
+    bill_code?: string | null
+    paid_at?: string | null
+  } | null
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -45,10 +52,23 @@ const stepTitles = [
   'Pilih PBT',
   'Maklumat Pemohon',
   'Maklumat Perniagaan / Syarikat',
-  'Maklumat Iklan / Papan Tanda',
+  'Maklumat Tambahan',
   'Dokumen Sokongan',
+  'Bayaran Fi Proses',
   'Pengesahan',
 ]
+
+const rawProcessingFeeAmount = Number(props.processFeePayment?.amount ?? 10000)
+const processingFeeAmountInCents = rawProcessingFeeAmount > 1000 ? rawProcessingFeeAmount : rawProcessingFeeAmount * 100
+const processingFeeAmount = processingFeeAmountInCents / 100
+const formattedProcessingFeeAmount = computed(() => processingFeeAmount.toFixed(2))
+const processFeeStatus = ref<string>(props.processFeePayment?.status ?? (props.processFeePayment?.paid ? 'paid' : 'unpaid'))
+const processFeeBillCode = ref<string>(props.processFeePayment?.bill_code ?? '')
+const isProcessFeeLoading = ref(false)
+const processFeeStatusMessage = ref('')
+let processFeeStatusInterval: ReturnType<typeof setInterval> | null = null
+let draftAutosaveTimeout: ReturnType<typeof setTimeout> | null = null
+const LICENSE_APPLICATION_DRAFT_KEY = 'license-application-create-draft-v1'
 
 function goToStep(targetStep: number) {
   if (targetStep < 1 || targetStep > stepTitles.length) return
@@ -132,7 +152,7 @@ const form = ref({
     hotel_name: '',
     company_address: '',
     company_postcode: '',
-    company_state: '',
+    company_state: 'Terengganu',
     company_district: '',
     company_phone: '',
     company_registration_number: '',
@@ -168,6 +188,7 @@ const form = ref({
   declaration: {
     agree: false,
   },
+  processing_fee_paid: Boolean(props.processFeePayment?.paid),
   document1File: null as File | null,
   document1Name: '',
   document2File: null as File | null,
@@ -266,7 +287,7 @@ watch([ethnicitySelection, customEthnicity], ([selection, custom]) => {
 })
 
 const applicantDistrictOptions = computed(() => districtMap[form.value.applicant_info.state] || [])
-const companyDistrictOptions = computed(() => districtMap[form.value.company_info.company_state] || [])
+const companyDistrictOptions = computed(() => districtMap.Terengganu || [])
 const companyHqDistrictOptions = computed(() => districtMap[form.value.company_info.company_state_hq] || [])
 
 watch(() => form.value.applicant_info.state, (state) => {
@@ -276,7 +297,11 @@ watch(() => form.value.applicant_info.state, (state) => {
 })
 
 watch(() => form.value.company_info.company_state, (state) => {
-  if (!districtMap[state]?.includes(form.value.company_info.company_district)) {
+  if (state !== 'Terengganu') {
+    form.value.company_info.company_state = 'Terengganu'
+  }
+
+  if (!districtMap.Terengganu.includes(form.value.company_info.company_district)) {
     form.value.company_info.company_district = ''
   }
 })
@@ -293,6 +318,102 @@ let applicantAutosaveController: AbortController | null = null
 function getCsrfToken() {
   const token = document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null
   return token?.content ?? ''
+}
+
+function createFormDraftSnapshot() {
+  return {
+    ...form.value,
+    document1File: null,
+    document2File: null,
+    document3File: null,
+    document4File: null,
+    document5File: null,
+    document6File: null,
+    document7File: null,
+    document8File: null,
+    document9File: null,
+    document10File: null,
+  }
+}
+
+function persistFormDraft() {
+  try {
+    const payload = {
+      step: step.value,
+      form: createFormDraftSnapshot(),
+      processFeeStatus: processFeeStatus.value,
+      processFeeBillCode: processFeeBillCode.value,
+      updatedAt: new Date().toISOString(),
+    }
+
+    localStorage.setItem(LICENSE_APPLICATION_DRAFT_KEY, JSON.stringify(payload))
+  } catch (error) {
+    console.error('Failed to save license application draft', error)
+  }
+}
+
+function restoreFormDraft() {
+  try {
+    const raw = localStorage.getItem(LICENSE_APPLICATION_DRAFT_KEY)
+    if (!raw) return
+
+    const draft = JSON.parse(raw) as {
+      step?: number
+      form?: Record<string, unknown>
+      processFeeStatus?: string
+      processFeeBillCode?: string
+    }
+
+    if (draft.form) {
+      const draftForm = draft.form as typeof form.value
+
+      Object.assign(form.value, {
+        ...draftForm,
+        applicant_info: {
+          ...form.value.applicant_info,
+          ...(draftForm.applicant_info ?? {}),
+        },
+        company_info: {
+          ...form.value.company_info,
+          ...(draftForm.company_info ?? {}),
+        },
+        advertisment_info: {
+          ...form.value.advertisment_info,
+          ...(draftForm.advertisment_info ?? {}),
+        },
+        declaration: {
+          ...form.value.declaration,
+          ...(draftForm.declaration ?? {}),
+        },
+      })
+    }
+
+    if (typeof draft.processFeeStatus === 'string') {
+      processFeeStatus.value = draft.processFeeStatus
+    }
+
+    if (typeof draft.processFeeBillCode === 'string') {
+      processFeeBillCode.value = draft.processFeeBillCode
+    }
+
+    const returnFromProcessFeePayment = new URLSearchParams(window.location.search).get('process_fee_return') === '1'
+
+    if (returnFromProcessFeePayment) {
+      step.value = 6
+    } else if (typeof draft.step === 'number' && draft.step >= 1 && draft.step <= stepTitles.length) {
+      step.value = draft.step
+    }
+  } catch (error) {
+    console.error('Failed to restore license application draft', error)
+  }
+}
+
+function clearFormDraft() {
+  try {
+    localStorage.removeItem(LICENSE_APPLICATION_DRAFT_KEY)
+  } catch (error) {
+    console.error('Failed to clear license application draft', error)
+  }
 }
 
 async function persistApplicantInfo() {
@@ -361,11 +482,176 @@ onBeforeUnmount(() => {
   if (applicantAutosaveController) {
     applicantAutosaveController.abort()
   }
+
+  if (processFeeStatusInterval) {
+    clearInterval(processFeeStatusInterval)
+    processFeeStatusInterval = null
+  }
+
+  if (draftAutosaveTimeout) {
+    clearTimeout(draftAutosaveTimeout)
+    draftAutosaveTimeout = null
+  }
+})
+
+function updateProcessFeeState(payload: { status?: string; paid?: boolean; bill_code?: string | null }) {
+  if (payload.status) {
+    processFeeStatus.value = payload.status
+  }
+
+  if (typeof payload.paid === 'boolean') {
+    form.value.processing_fee_paid = payload.paid
+  }
+
+  if (payload.bill_code !== undefined && payload.bill_code !== null) {
+    processFeeBillCode.value = payload.bill_code
+  }
+}
+
+async function refreshProcessFeeStatus() {
+  if (isProcessFeeLoading.value) return
+
+  isProcessFeeLoading.value = true
+  processFeeStatusMessage.value = ''
+
+  try {
+    const response = await fetch('/license/process-fee/status', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Semakan status bayaran gagal (HTTP ${response.status})`)
+    }
+
+    const payload = await response.json()
+    updateProcessFeeState(payload)
+
+    if (payload.paid) {
+      processFeeStatusMessage.value = 'Bayaran berjaya disahkan secara automatik.'
+    }
+  } catch (error) {
+    processFeeStatusMessage.value = 'Tidak dapat menyemak status bayaran sekarang. Sila cuba semula.'
+    console.error('Process fee status sync failed', error)
+  } finally {
+    isProcessFeeLoading.value = false
+  }
+}
+
+async function startProcessFeePayment() {
+  if (isProcessFeeLoading.value || form.value.processing_fee_paid) return
+
+  isProcessFeeLoading.value = true
+  processFeeStatusMessage.value = ''
+
+  try {
+    const response = await fetch('/license/process-fee/start', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      processFeeStatusMessage.value = payload?.message || 'Gagal memulakan bayaran. Sila cuba semula.'
+      return
+    }
+
+    updateProcessFeeState(payload)
+
+    if (payload.paid) {
+      processFeeStatusMessage.value = 'Bayaran telah direkodkan.'
+      return
+    }
+
+    if (payload.payment_url) {
+      persistFormDraft()
+      window.location.assign(payload.payment_url)
+      return
+    }
+
+    processFeeStatusMessage.value = 'URL bayaran tidak dijumpai. Sila cuba semula.'
+  } catch (error) {
+    processFeeStatusMessage.value = 'Tidak dapat menghubungi pelayan bayaran. Sila cuba semula.'
+    console.error('Start process fee payment failed', error)
+  } finally {
+    isProcessFeeLoading.value = false
+  }
+}
+
+watch(
+  () => step.value,
+  (currentStep) => {
+    if (currentStep === 6 && processFeeStatus.value === 'pending' && !form.value.processing_fee_paid) {
+      void refreshProcessFeeStatus()
+
+      if (!processFeeStatusInterval) {
+        processFeeStatusInterval = setInterval(() => {
+          void refreshProcessFeeStatus()
+        }, 5000)
+      }
+
+      return
+    }
+
+    if (processFeeStatusInterval) {
+      clearInterval(processFeeStatusInterval)
+      processFeeStatusInterval = null
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => form.value.processing_fee_paid,
+  (paid) => {
+    if (paid && processFeeStatusInterval) {
+      clearInterval(processFeeStatusInterval)
+      processFeeStatusInterval = null
+    }
+  },
+)
+
+watch(
+  [() => form.value, () => step.value, processFeeBillCode, processFeeStatus],
+  () => {
+    if (draftAutosaveTimeout) {
+      clearTimeout(draftAutosaveTimeout)
+    }
+
+    draftAutosaveTimeout = setTimeout(() => {
+      persistFormDraft()
+    }, 400)
+  },
+  { deep: true },
+)
+
+onMounted(() => {
+  restoreFormDraft()
+
+  if (props.processFeePayment?.paid) {
+    form.value.processing_fee_paid = true
+    processFeeStatus.value = 'paid'
+  }
+
+  if (props.processFeePayment?.bill_code) {
+    processFeeBillCode.value = props.processFeePayment.bill_code
+  }
+
+  if (!form.value.processing_fee_paid && processFeeStatus.value === 'pending') {
+    void refreshProcessFeeStatus()
+  }
 })
 
 function nextStep() {
   // Allow progressing through steps without completing fields
-  if (step.value < 6) step.value++
+  if (step.value < stepTitles.length) step.value++
 }
 
 function prevStep() {
@@ -375,6 +661,12 @@ function prevStep() {
 function submitForm() {
   submitSuccess.value = ''
   submitError.value = ''
+
+  if (!form.value.processing_fee_paid) {
+    submitError.value = `Sila buat bayaran fi proses RM${formattedProcessingFeeAmount.value} sebelum menghantar permohonan.`
+    step.value = 6
+    return
+  }
 
   const documentTypes = [
     'memorandum',
@@ -417,6 +709,11 @@ function submitForm() {
     company_info: companyInfo,
     license_type,
     advertisement_info: form.value.advertisment_info.dynamic_table_rows,
+    processing_fee: {
+      amount: processingFeeAmountInCents,
+      paid: form.value.processing_fee_paid,
+      bill_code: processFeeBillCode.value,
+    },
     documents,
   }
 
@@ -434,6 +731,7 @@ function submitForm() {
       isSubmitting.value = false
     },
     onSuccess: () => {
+      clearFormDraft()
       submitSuccess.value = 'Permohonan berjaya dihantar.'
       if (redirectTimeout) clearTimeout(redirectTimeout)
       redirectTimeout = setTimeout(() => {
@@ -699,9 +997,9 @@ function getPbtCardClass(index: number) {
     <div class="w-full h-full flex flex-col p-6 bg-white dark:bg-black rounded-xl shadow dark:shadow-black/30">
 
       <!-- Step Indicator -->
-      <div class="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+      <div class="mb-3 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
         <button
-          v-for="n in 6"
+          v-for="n in stepTitles.length"
           :key="n"
           type="button"
           class="rounded-xl border px-3 py-3 text-left transition"
@@ -969,10 +1267,10 @@ function getPbtCardClass(index: number) {
             </div>
 
             <div>
-              <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Nama Hotel</label>
+              <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Nama Rumah Tumpangan</label>
               <input v-model="form.company_info.hotel_name"
                 class="input border border-gray-300 w-full px-3 py-2 rounded-xl dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
-                     placeholder="Masukkan Nama Hotel" />
+                     placeholder="Masukkan Nama Rumah Tumpangan" />
             </div>
 
             <div>
@@ -995,9 +1293,9 @@ function getPbtCardClass(index: number) {
             <div>
                     <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Negeri</label>
               <select v-model="form.company_info.company_state"
+                  disabled
                       class="input border border-gray-300 w-full px-3 py-2 rounded-xl dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
-                <option value="">-- Pilih Negeri --</option>
-                <option v-for="state in malaysiaStates" :key="`company-${state}`" :value="state">{{ state }}</option>
+                <option value="Terengganu">Terengganu</option>
               </select>
             </div>
 
@@ -1043,7 +1341,7 @@ function getPbtCardClass(index: number) {
                 class="input border border-gray-300 w-full px-3 py-2 rounded-xl dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
             </div>
 
-            <div>
+            <!-- <div>
               <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Kategori Premis</label>
               <select v-model="form.company_info.company_category"
                   class="input border border-gray-300 w-full px-3 py-2 rounded-xl dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
@@ -1068,7 +1366,7 @@ function getPbtCardClass(index: number) {
                   </ul>
                 </template>
               </div>
-            </div>
+            </div> -->
 
             <div>
               <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Lokasi Premis</label>
@@ -1130,17 +1428,18 @@ function getPbtCardClass(index: number) {
           </div>
 
           <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
+          <h2 class="text-xl font-bold mb-4 text-slate-900 dark:text-slate-100">Maklumat Ibu Pejabat</h2>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                    <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Alamat Perniagaan (Ibu Pejabat)</label>
+              <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Alamat Perniagaan (Ibu Pejabat)</label>
               <input v-model="form.company_info.company_address_hq"
                       class="input border border-gray-300 w-full px-3 py-2 rounded-xl dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
                       placeholder="Masukkan Alamat Perniagaan (Ibu Pejabat)" />
             </div>
 
             <div>
-                    <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Poskod</label>
+              <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Poskod</label>
               <input v-model="form.company_info.company_postcode_hq"
                      inputmode="numeric"
                      pattern="[0-9]*"
@@ -1150,7 +1449,7 @@ function getPbtCardClass(index: number) {
             </div>
 
             <div>
-                    <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Negeri</label>
+              <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Negeri</label>
               <select v-model="form.company_info.company_state_hq"
                       class="input border border-gray-300 w-full px-3 py-2 rounded-xl dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
                 <option value="">-- Pilih Negeri --</option>
@@ -1179,65 +1478,67 @@ function getPbtCardClass(index: number) {
                       placeholder="Masukkan No Telefon" />
             </div>
           </div>
-
-          <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
-
-          <div class="overflow-auto">
-            <div class="flex justify-between items-center mb-2">
-              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Jenis Lesen Yang Dipohon</h2>
-              <button type="button" @click="addLicenseTypeRow" class="px-3 py-1 bg-green-600 text-white rounded-xl dark:bg-green-500">Add Row</button>
-            </div>
-            <table class="w-full table-auto border-collapse text-slate-900 dark:text-slate-100">
-              <thead>
-                <tr class="bg-gray-100 dark:bg-slate-800">
-                  <th class="border px-2 py-1 text-center">No</th>
-                  <th class="border px-2 py-1 text-left">Aktiviti Perniagaan Dijalankan</th>
-                  <th class="border px-2 py-1 text-left">Keluasan (m³)</th>
-                  <th class="border px-2 py-1 text-left">Unit / Bil Bilik</th>
-                  <th class="border px-2 py-1 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(row, rIndex) in form.company_info.license_type" :key="rIndex">
-                  <td class="border px-2 py-1 text-center">{{ rIndex + 1 }}</td>
-                  <td class="border px-2 py-1">
-                    <input v-model="row.aktiviti" class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                  </td>
-                  <td class="border px-2 py-1">
-                    <input v-model="row.keluasan"
-                           inputmode="numeric"
-                           pattern="[0-9]*"
-                           @input="row.keluasan = enforceNumericValue($event)"
-                           class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                  </td>
-                  <td class="border px-2 py-1">
-                    <input v-model="row.unit_bilik"
-                           inputmode="numeric"
-                           pattern="[0-9]*"
-                           @input="row.unit_bilik = enforceNumericValue($event)"
-                           class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                  </td>
-                  <td class="border px-2 py-1 text-center">
-                    <button type="button" @click="removeLicenseTypeRow(rIndex)" class="px-2 py-1 bg-red-600 text-white rounded-xl dark:bg-red-500" :disabled="form.company_info.license_type.length <= 1">Remove</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
           <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
         </div>
 
         <!-- STEP 4 -->
         <div v-if="step === 4">
           <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
-          <h2 class="text-xl font-bold mb-4 text-slate-900 dark:text-slate-100">Maklumat Iklan / Papan Tanda</h2>
+          <h2 class="text-xl font-bold mb-4 text-slate-900 dark:text-slate-100">Maklumat Tambahan</h2>
+          <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
 
           <div class="mt-4">
-            <div class="flex justify-between items-center mb-2">
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-200">Butiran Iklan / Papan Tanda</label>
-              <button type="button" @click="addAdvertismentRow" class="px-3 py-1 bg-green-600 text-white rounded-xl dark:bg-green-500">Add Row</button>
-            </div>
             <div class="overflow-auto">
+              <div class="flex justify-between items-center mb-2">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Jenis Lesen Yang Dipohon</h2>
+                <button type="button" @click="addLicenseTypeRow"
+                  class="px-3 py-1 bg-green-600 text-white rounded-xl dark:bg-green-500">Add Row</button>
+              </div>
+              <table class="w-full table-auto border-collapse text-slate-900 dark:text-slate-100">
+                <thead>
+                  <tr class="bg-gray-100 dark:bg-slate-800">
+                    <th class="border px-2 py-1 text-center">No</th>
+                    <th class="border px-2 py-1 text-left">Aktiviti Perniagaan Dijalankan</th>
+                    <th class="border px-2 py-1 text-left">Keluasan (m³)</th>
+                    <th class="border px-2 py-1 text-left">Unit / Bil Bilik</th>
+                    <th class="border px-2 py-1 text-center">Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, rIndex) in form.company_info.license_type" :key="rIndex">
+                    <td class="border px-2 py-1 text-center">{{ rIndex + 1 }}</td>
+                    <td class="border px-2 py-1">
+                      <input v-model="row.aktiviti"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
+                    </td>
+                    <td class="border px-2 py-1">
+                      <input v-model="row.keluasan" inputmode="numeric" pattern="[0-9]*"
+                        @input="row.keluasan = enforceNumericValue($event)"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
+                    </td>
+                    <td class="border px-2 py-1">
+                      <input v-model="row.unit_bilik" inputmode="numeric" pattern="[0-9]*"
+                        @input="row.unit_bilik = enforceNumericValue($event)"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
+                    </td>
+                    <td class="border px-2 py-1 text-center">
+                      <button type="button" @click="removeLicenseTypeRow(rIndex)"
+                        class="px-2 py-1 bg-red-600 text-white rounded-xl dark:bg-red-500"
+                        :disabled="form.company_info.license_type.length <= 1">Remove</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
+
+            <div class="overflow-auto">
+              <div class="flex justify-between items-center mb-2">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Maklumat Iklan / Papan Tanda</h2>
+                <button type="button" @click="addAdvertismentRow"
+                  class="px-3 py-1 bg-green-600 text-white rounded-xl dark:bg-green-500">Add Row</button>
+              </div>
               <table class="w-full table-auto border-collapse text-slate-900 dark:text-slate-100">
                 <thead>
                   <tr class="bg-gray-100 dark:bg-slate-800">
@@ -1247,54 +1548,52 @@ function getPbtCardClass(index: number) {
                     <th class="border px-2 py-1 text-left">Panjang (M)</th>
                     <th class="border px-2 py-1 text-left">Lebar (M)</th>
                     <th class="border px-2 py-1 text-left">Bil Iklan</th>
-                    <th class="border px-2 py-1 text-center">Aksi</th>
+                    <th class="border px-2 py-1 text-center">Tindakan</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="(row, rIndex) in form.advertisment_info.dynamic_table_rows" :key="rIndex">
                     <td class="border px-2 py-1 text-center">{{ rIndex + 1 }}</td>
                     <td class="border px-2 py-1">
-                      <select v-model="row.type" class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
+                      <select v-model="row.type"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
                         <option value="">-- Pilih --</option>
                         <option v-for="opt in advertismentOptions1" :key="opt" :value="opt">{{ opt }}</option>
                       </select>
                     </td>
                     <td class="border px-2 py-1">
-                      <select v-model="row.structure" class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
+                      <select v-model="row.structure"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
                         <option value="">-- Pilih --</option>
                         <option v-for="opt in advertismentOptions2" :key="opt" :value="opt">{{ opt }}</option>
                       </select>
                     </td>
                     <td class="border px-2 py-1">
-                      <input v-model="row.length"
-                             inputmode="numeric"
-                             pattern="[0-9]*"
-                             @input="row.length = enforceNumericValue($event)"
-                             class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
+                      <input v-model="row.length" inputmode="numeric" pattern="[0-9]*"
+                        @input="row.length = enforceNumericValue($event)"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
                     </td>
                     <td class="border px-2 py-1">
-                      <input v-model="row.width"
-                             inputmode="numeric"
-                             pattern="[0-9]*"
-                             @input="row.width = enforceNumericValue($event)"
-                             class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
+                      <input v-model="row.width" inputmode="numeric" pattern="[0-9]*"
+                        @input="row.width = enforceNumericValue($event)"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
                     </td>
                     <td class="border px-2 py-1">
-                      <input v-model="row.number_of_ads"
-                             inputmode="numeric"
-                             pattern="[0-9]*"
-                             @input="row.number_of_ads = enforceNumericValue($event)"
-                             class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
+                      <input v-model="row.number_of_ads" inputmode="numeric" pattern="[0-9]*"
+                        @input="row.number_of_ads = enforceNumericValue($event)"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
                     </td>
                     <td class="border px-2 py-1 text-center">
-                      <button type="button" @click="removeAdvertismentRow(rIndex)" class="px-2 py-1 bg-red-600 text-white rounded-xl dark:bg-red-500" :disabled="form.advertisment_info.dynamic_table_rows.length <= 1">Remove</button>
+                      <button type="button" @click="removeAdvertismentRow(rIndex)"
+                        class="px-2 py-1 bg-red-600 text-white rounded-xl dark:bg-red-500"
+                        :disabled="form.advertisment_info.dynamic_table_rows.length <= 1">Remove</button>
                     </td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </div>
-        <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
+          <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
         </div>
 
         <!-- STEP 5 -->
@@ -1304,18 +1603,54 @@ function getPbtCardClass(index: number) {
           <div class="grid grid-cols-2 gap-6">
             <div class="space-y-4">
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Memorandum / Borang A / Borang B / Borang D</label>
-                <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
-                    <input type="file" class="hidden" @change="(e) => handleDocumentChange(1, e)" />
+                <label class="text-sm font-medium mb-2 text-slate-700 dark:text-slate-200 leading-6">
+                  
+                  <p>
+                    i) (a) Memorandum dan Perkara Persatuan Bagi Syarikat
+                    <span class="italic">
+                      (Memorandum and Articles of Association)
+                    </span>
+                    Borang 49
+                    <span class="italic">
+                      (Return Giving Particulars)
+                    </span>
+                    Mengikut Akta Pendaftaran Syarikat 1965.
+                  </p>
+
+                  <p class="my-2 font-semibold text-center">ATAU</p>
+
+                  <p>
+                    (b) Borang A
+                    <span class="italic">(Pendaftaran Perniagaan)</span>
+                    atau Borang B
+                    <span class="italic">(Pendaftaran Perubahan Dalam Perniagaan)</span>
+                    dan Borang D
+                    <span class="italic">(Perakuan Pendaftaran Perniagaan)</span>
+                    mengikut Akta Pendaftaran Perniagaan 1956 (Pindaan 1978).
+                  </p>
+
+                </label>
+
+                <div class="flex items-center gap-3 mt-2">
+                  <label
+                    class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100"
+                  >
+                    <input
+                      type="file"
+                      class="hidden"
+                      @change="(e) => handleDocumentChange(1, e)"
+                    />
                     <span>Choose File</span>
                   </label>
-                  <span class="text-xs text-gray-600 dark:text-slate-400">{{ form.document1Name || 'No file chosen' }}</span>
+
+                  <span class="text-xs text-gray-600 dark:text-slate-400">
+                    {{ form.document1Name || 'No file chosen' }}
+                  </span>
                 </div>
               </div>
 
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Pelan lokasi premis beserta gambar premis [2 salinan]</label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">ii) Pelan lokasi premis perniagaan beserta gambar premis</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(2, e)" />
@@ -1326,7 +1661,7 @@ function getPbtCardClass(index: number) {
               </div>
 
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Pelan lantai premis / kawasan (ukuran dalam meter persegi) [2 salinan] </label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">iii) Pelan lantai premis / kawasan (ukuran dalam meter persegi)</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(3, e)" />
@@ -1337,7 +1672,7 @@ function getPbtCardClass(index: number) {
               </div>
 
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Surat perjanjian atau kebenaran tuan bangunan / tanah yang disetemkan (jika bangunan / tanah yang disewa)</label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">iv) Surat perjanjian atau kebenaran tuan bangunan / tanah yang disetemkan (jika bangunan / tanah yang disewa)</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(4, e)" />
@@ -1348,7 +1683,7 @@ function getPbtCardClass(index: number) {
               </div>
 
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Salinan geran tanah / Lesen Pendudukan Sementara (LPS) / lain-lain dokumen yang berkaitan</label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">v) Salinan geran tanah / Lesen Pendudukan Sementara (LPS) / lain-lain dokumen yang berkaitan</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(5, e)" />
@@ -1361,7 +1696,7 @@ function getPbtCardClass(index: number) {
 
             <div class="space-y-4">
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Salinan Sijil Kelayakan Menduduki Bangunan / Sementara (CF/CCC) (TCF)</label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">vi) Salinan Sijil Kelayakan Menduduki Bangunan / Sementara (CF/CCC) (TCF)</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(6, e)" />
@@ -1372,7 +1707,7 @@ function getPbtCardClass(index: number) {
               </div>
 
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Gambar pemohon berukuran passport [2 keping]</label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">vii) Gambar pemohon berukuran passport</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(7, e)" />
@@ -1383,7 +1718,7 @@ function getPbtCardClass(index: number) {
               </div>
 
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Salinan Kad Pengenalan pemohon</label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">viii) Salinan Kad Pengenalan pemohon</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(8, e)" />
@@ -1394,7 +1729,7 @@ function getPbtCardClass(index: number) {
               </div>
 
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Senarai nama semua Pengendali Makanan / Pembantu (Perniagaan Makanan) serta 2 salinan Kad Pengenalan dan 2 keping gambar berukuran passport bagi setiap orang (jika berkenaan)</label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">ix) Senarai nama semua Pengendali Makanan / Pembantu (Perniagaan Makanan) serta Kad Pengenalan dan gambar berukuran passport bagi setiap orang (jika berkenaan)</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(9, e)" />
@@ -1405,7 +1740,7 @@ function getPbtCardClass(index: number) {
               </div>
 
               <div class="flex flex-col">
-                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">Carta Proses Pengeluaran Pengilangan / Pemerosesan (jika ada)</label>
+                <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">x) Carta Proses Pengeluaran Pengilangan / Pemerosesan (jika ada)</label>
                 <div class="flex items-center gap-3">
                   <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(10, e)" />
@@ -1421,6 +1756,59 @@ function getPbtCardClass(index: number) {
 
         <!-- STEP 6 -->
         <div v-if="step === 6">
+          <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
+          <h2 class="text-xl font-bold mb-4 text-slate-900 dark:text-slate-100">Bayaran Fi Proses</h2>
+
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-6 space-y-4">
+            <div>
+              <div class="text-sm text-slate-600 dark:text-slate-300">Jumlah perlu dibayar</div>
+              <div class="text-3xl font-bold text-slate-900 dark:text-slate-100">RM{{ formattedProcessingFeeAmount }}</div>
+              <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                Permohonan hanya boleh dihantar selepas fi proses disahkan sebagai telah dibayar.
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                @click="startProcessFeePayment"
+                :disabled="isProcessFeeLoading || form.processing_fee_paid"
+                class="px-4 py-2 bg-[#2563EB] hover:bg-[#154dc5] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl"
+              >
+                {{ isProcessFeeLoading ? 'Membuka bayaran...' : form.processing_fee_paid ? 'Bayaran Selesai' : 'Bayar Sekarang' }}
+              </button>
+
+              <button
+                type="button"
+                @click="refreshProcessFeeStatus"
+                :disabled="isProcessFeeLoading"
+                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100"
+              >
+                Semak Status Bayaran
+              </button>
+            </div>
+
+            <div class="text-sm" :class="form.processing_fee_paid ? 'text-green-700 dark:text-green-300' : processFeeStatus === 'pending' ? 'text-amber-700 dark:text-amber-300' : 'text-red-700 dark:text-red-300'">
+              <template v-if="form.processing_fee_paid">
+                Bayaran diterima. Anda boleh teruskan ke langkah pengesahan.
+              </template>
+              <template v-else-if="processFeeStatus === 'pending'">
+                Bayaran sedang diproses. Status akan dikemas kini secara automatik selepas pembayaran berjaya.
+              </template>
+              <template v-else>
+                Bayaran belum dibuat. Sila buat pembayaran ToyyibPay untuk teruskan penghantaran.
+              </template>
+            </div>
+
+            <div v-if="processFeeStatusMessage" class="text-sm text-slate-600 dark:text-slate-300">
+              {{ processFeeStatusMessage }}
+            </div>
+          </div>
+          <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
+        </div>
+
+        <!-- STEP 7 -->
+        <div v-if="step === 7">
           <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
           <h2 class="text-xl font-bold mb-4 text-slate-900 dark:text-slate-100">Pengesahan</h2>
 
@@ -1517,7 +1905,7 @@ function getPbtCardClass(index: number) {
                     <div class="text-sm text-slate-900 dark:text-slate-100">{{ form.company_info.company_name || '-' }}</div>
                   </div>
                   <div>
-                    <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Nama Hotel</div>
+                    <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Nama Rumah Tumpangan</div>
                     <div class="text-sm text-slate-900 dark:text-slate-100">{{ form.company_info.hotel_name || '-' }}</div>
                   </div>
                   <div>
@@ -1709,6 +2097,22 @@ function getPbtCardClass(index: number) {
                   </div>
                 </div>
               </section>
+
+              <section>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{{ stepTitles[5] }}</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Fi Proses</div>
+                    <div class="text-sm text-slate-900 dark:text-slate-100">RM{{ formattedProcessingFeeAmount }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Status Bayaran</div>
+                    <div class="text-sm" :class="form.processing_fee_paid ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'">
+                      {{ form.processing_fee_paid ? 'Sudah dibayar' : 'Belum dibayar' }}
+                    </div>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
 
@@ -1731,18 +2135,28 @@ function getPbtCardClass(index: number) {
         </div>
 
         <div class="ml-auto">
-          <button v-if="step < 6"
+          <button v-if="step < stepTitles.length"
                   @click="nextStep"
                   class="px-4 py-2 bg-[#2563EB] hover:bg-[#154dc5] dark:bg-[#60A5FA] text-white rounded-xl cursor-pointer">
             Seterusnya →
           </button>
 
-          <button v-if="step === 6"
-                  @click="submitForm"
-                  :disabled="!form.declaration.agree || isSubmitting"
-                  class="px-4 py-2 bg-black text-white rounded-xl cursor-pointer dark:bg-slate-100 dark:text-slate-900">
-            {{ isSubmitting ? 'Sedang dihantar...' : 'Hantar Permohonan' }}
-          </button>
+          <div v-if="step === stepTitles.length" class="flex flex-col items-end gap-2">
+            <button
+              @click="submitForm"
+              :disabled="!form.declaration.agree || !form.processing_fee_paid || isSubmitting"
+              class="px-4 py-2 bg-black text-white rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed dark:bg-slate-100 dark:text-slate-900"
+            >
+              {{ isSubmitting ? 'Sedang dihantar...' : 'Hantar Permohonan' }}
+            </button>
+
+            <p
+              v-if="!form.processing_fee_paid"
+              class="text-sm text-amber-700 dark:text-amber-300"
+            >
+              Sila buat bayaran fi proses RM{{ formattedProcessingFeeAmount }} pada langkah "Bayaran Fi Proses" terlebih dahulu.
+            </p>
+          </div>
         </div>
       </div>
 

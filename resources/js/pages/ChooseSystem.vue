@@ -140,7 +140,7 @@ const fiSejahteraNotice = computed(() => {
                             class="w-36 h-36 object-contain mb-6 dark:brightness-0 dark:invert" />
 
                         <h2 class="text-xl text-center font-bold text-gray-800 dark:text-[#EDEDEC]">
-                            Permohonan/Pembaharuan Lesen Perniagaan
+                            E-Lesen <br /> Rumah Tumpangan
                         </h2>
                     </Link>
                 </div>

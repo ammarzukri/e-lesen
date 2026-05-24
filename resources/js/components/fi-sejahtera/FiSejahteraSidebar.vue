@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { LayoutGrid, Shield, Users, DollarSign, HandCoins, WalletCards } from 'lucide-vue-next';
+import { LayoutGrid, Banknote, Users, DollarSign, HandCoins, WalletCards } from 'lucide-vue-next';
 
 const page = usePage();
 const role = page.props.auth?.user?.role;
@@ -14,7 +14,7 @@ const navigationItems = isAdminRole
     ]
     : [
         { label: 'Dashboard', href: '/fi-sejahtera/dashboard', icon: LayoutGrid },
-        { label: 'Fi Sejahtera', href: '/fi-sejahtera/apply', icon: Shield },
+        { label: 'Fi Sejahtera', href: '/fi-sejahtera/apply', icon: Banknote },
         { label: 'Senarai Tetamu', href: '/fi-sejahtera/guest', icon: Users },
         { label: 'Senarai Pembayaran', href: '/fi-sejahtera/tax', icon: DollarSign },
     ];
