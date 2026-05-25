@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
@@ -106,6 +107,7 @@ class LicenseApplicationController extends Controller
         $processFeePayload = $this->formatProcessFeePaymentPayload($processFeePayment);
 
         return Inertia::render('e-lesen/lesen/Create', [
+            'currentUserId' => $user?->id,
             'initialApplicantInfo' => [
                 'name' => $user?->name,
                 'ic_no' => $user?->ic_no,
@@ -167,6 +169,15 @@ class LicenseApplicationController extends Controller
         }
 
         $user = auth()->user();
+        $requestBillPhone = (string) $request->query('bill_phone', '');
+        $billPhone = preg_replace('/\D+/', '', $requestBillPhone) ?: preg_replace('/\D+/', '', (string) ($user?->phone_number ?? ''));
+
+        if (! $billPhone) {
+            return response()->json([
+                'message' => 'Sila isi nombor telefon pemohon sebelum membuat bayaran fi proses.',
+            ], 422);
+        }
+
         $externalReference = 'license-process-fee-'.auth()->id().'-'.Str::uuid();
         $response = Http::asForm()->post($baseUrl.'/index.php/api/createBill', [
             'userSecretKey' => $secretKey,
@@ -181,7 +192,7 @@ class LicenseApplicationController extends Controller
             'billExternalReferenceNo' => $externalReference,
             'billTo' => $user?->name ?? 'Pemohon',
             'billEmail' => $user?->email ?? 'no-reply@example.com',
-            'billPhone' => $user?->phone_number ?? '',
+            'billPhone' => $billPhone,
         ]);
 
         if (! $response->successful()) {
@@ -191,11 +202,36 @@ class LicenseApplicationController extends Controller
         }
 
         $payload = $response->json();
-        $billCode = data_get($payload, '0.BillCode') ?? data_get($payload, 'BillCode');
+
+        if (! is_array($payload)) {
+            $decodedBody = json_decode((string) $response->body(), true);
+            $payload = is_array($decodedBody) ? $decodedBody : [];
+        }
+
+        $billCode = data_get($payload, '0.BillCode')
+            ?? data_get($payload, 'BillCode')
+            ?? data_get($payload, '0.billCode')
+            ?? data_get($payload, 'billCode');
 
         if (! $billCode) {
+            $apiMessage = data_get($payload, '0.msg')
+                ?? data_get($payload, 'msg')
+                ?? data_get($payload, '0.message')
+                ?? data_get($payload, 'message')
+                ?? data_get($payload, '0.error')
+                ?? data_get($payload, 'error');
+
+            Log::warning('ToyyibPay createBill missing BillCode', [
+                'user_id' => auth()->id(),
+                'status' => $response->status(),
+                'response_payload' => $payload,
+                'response_body' => (string) $response->body(),
+            ]);
+
             return response()->json([
-                'message' => 'Gagal mendapatkan kod pembayaran ToyyibPay.',
+                'message' => $apiMessage
+                    ? 'Gagal mendapatkan kod pembayaran ToyyibPay: '.$apiMessage
+                    : 'Gagal mendapatkan kod pembayaran ToyyibPay. Sila semak tetapan sandbox, API key, dan category code.',
             ], 422);
         }
 

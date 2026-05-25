@@ -98,6 +98,7 @@ const selectedHotelIsExpired = computed(() => {
     const selected = ownedHotels.value.find((hotel) => String(hotel.id) === selectedHotelId.value);
     return Boolean(selected?.is_expired);
 });
+const dailyDetailsOpen = ref(true);
 
 function formatCurrency(value: number) {
     return new Intl.NumberFormat('ms-MY', {
@@ -131,7 +132,7 @@ function applyFilters() {
     });
 }
 
-function goToBayar() {
+function hantarLaporan() {
     if (!canPay.value) {
         return;
     }
@@ -141,6 +142,10 @@ function goToBayar() {
         month: String(selectedMonth.value),
         year: String(selectedYear.value),
     });
+}
+
+function toggleDailyDetails() {
+    dailyDetailsOpen.value = !dailyDetailsOpen.value;
 }
 </script>
 
@@ -242,16 +247,20 @@ function goToBayar() {
                         <CardTitle>Butiran Kutipan Harian</CardTitle>
                     </CardHeader>
                     <CardContent class="space-y-4">
-                        <details open class="rounded-lg border border-border bg-background">
-                            <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground">
+                        <details :open="dailyDetailsOpen" class="rounded-lg border border-border bg-background">
+                            <summary
+                                class="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-foreground"
+                                @click.prevent="toggleDailyDetails"
+                            >
                                 <div class="flex items-center justify-between">
                                     <span>Butiran Harian</span>
                                     <button
                                         type="button"
                                         class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-slate-500 text-base font-bold leading-none text-foreground hover:bg-muted"
                                         aria-label="Tambah"
+                                        @click.prevent.stop="toggleDailyDetails"
                                     >
-                                        +
+                                        {{ dailyDetailsOpen ? '-' : '+' }}
                                     </button>
                                 </div>
                             </summary>
@@ -295,8 +304,8 @@ function goToBayar() {
                         </details>
 
                         <div class="flex justify-end">
-                            <Button type="button" :disabled="!canPay" @click="goToBayar">
-                                Bayar
+                            <Button type="button" :disabled="!canPay" @click="hantarLaporan">
+                                Hantar Laporan
                             </Button>
                         </div>
                     </CardContent>

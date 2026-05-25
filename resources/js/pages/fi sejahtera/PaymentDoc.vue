@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { Head, useForm, usePage } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 
 import FiSejahteraNavbar from '@/components/fi-sejahtera/FiSejahteraNavbar.vue';
 import FiSejahteraSidebar from '@/components/fi-sejahtera/FiSejahteraSidebar.vue';
@@ -36,6 +36,12 @@ const uploadForm = useForm<{
 }>({
     submission_id: '',
     hotel_guest_list: null,
+});
+
+const submitToBktForm = useForm<{
+    submission_id: string;
+}>({
+    submission_id: '',
 });
 
 const monthLabelMap: Record<string, string> = {
@@ -98,6 +104,10 @@ function paymentStatusBadgeClass(status?: string) {
 }
 
 function formatSubmissionStatus(status: string) {
+    if (status === 'submitted_to_pbt') {
+        return 'Dihantar ke PBT';
+    }
+
     if (status === 'paid') {
         return 'Bayaran Berjaya';
     }
@@ -126,6 +136,10 @@ function formatSubmissionStatus(status: string) {
 }
 
 function submissionStatusBadgeClass(status: string) {
+    if (status === 'submitted_to_pbt') {
+        return 'bg-violet-100 text-violet-700';
+    }
+
     if (status === 'verified') {
         return 'bg-green-100 text-green-700';
     }
@@ -159,7 +173,15 @@ function selectedFileName(submissionId: number) {
 }
 
 function canSubmitDocs(submission: PaymentSubmissionRow) {
-    return submission.payment_status === 'Berjaya' && (submission.status === 'paid' || submission.status === 'rejected');
+    return submission.status === 'payment_pending' && !submission.hotel_guest_list_url;
+}
+
+function canProceedPayment(submission: PaymentSubmissionRow) {
+    return submission.status === 'payment_pending' && Boolean(submission.hotel_guest_list_url) && submission.payment_status !== 'Berjaya';
+}
+
+function canSubmitToBkt(submission: PaymentSubmissionRow) {
+    return submission.status === 'paid' && submission.payment_status === 'Berjaya' && Boolean(submission.hotel_guest_list_url);
 }
 
 function submitPaymentDoc(submissionId: number) {
@@ -181,6 +203,20 @@ function submitPaymentDoc(submissionId: number) {
         },
     });
 }
+
+function proceedPayment(submissionId: number) {
+    router.get('/fi-sejahtera/payment/pay', {
+        submission_id: String(submissionId),
+    });
+}
+
+function submitToBkt(submissionId: number) {
+    submitToBktForm.submission_id = String(submissionId);
+
+    submitToBktForm.post('/fi-sejahtera/payment/submit-bkt', {
+        preserveScroll: true,
+    });
+}
 </script>
 
 <template>
@@ -196,7 +232,7 @@ function submitPaymentDoc(submissionId: number) {
                 <div>
                     <h1 class="text-2xl font-bold text-foreground">Hantar Bukti Pembayaran</h1>
                     <p class="text-sm text-muted-foreground">
-                        Hantar bukti pembayaran kepada Perbendaharaan.
+                        Ikuti aliran baharu: semak status laporan PBT, muat naik senarai sistem hotel, bayar, kemudian hantar ke BKT.
                     </p>
                 </div>
 
@@ -317,7 +353,7 @@ function submitPaymentDoc(submissionId: number) {
                                                     :disabled="uploadForm.processing || !selectedFiles[submission.id]"
                                                     @click="submitPaymentDoc(submission.id)"
                                                 >
-                                                    {{ uploadForm.processing && uploadingSubmissionId === submission.id ? 'Menghantar...' : 'Hantar' }}
+                                                    {{ uploadForm.processing && uploadingSubmissionId === submission.id ? 'Memuat naik...' : 'Muat Naik Senarai Sistem Hotel' }}
                                                 </Button>
                                                 <p
                                                     v-if="uploadForm.errors.hotel_guest_list && uploadingSubmissionId === submission.id"
@@ -326,7 +362,28 @@ function submitPaymentDoc(submissionId: number) {
                                                     {{ uploadForm.errors.hotel_guest_list }}
                                                 </p>
                                             </div>
-                                            <span v-else-if="submission.status === 'submitted' || submission.status === 'verified'">-</span>
+
+                                            <Button
+                                                v-else-if="canProceedPayment(submission)"
+                                                type="button"
+                                                size="sm"
+                                                @click="proceedPayment(submission.id)"
+                                            >
+                                                Bayar
+                                            </Button>
+
+                                            <Button
+                                                v-else-if="canSubmitToBkt(submission)"
+                                                type="button"
+                                                size="sm"
+                                                :disabled="submitToBktForm.processing"
+                                                @click="submitToBkt(submission.id)"
+                                            >
+                                                {{ submitToBktForm.processing ? 'Menghantar...' : 'Hantar' }}
+                                            </Button>
+
+                                            <span v-else-if="submission.status === 'submitted_to_pbt'">Menunggu kelulusan PBT</span>
+                                            <span v-else-if="submission.status === 'submitted' || submission.status === 'bkt_verified' || submission.status === 'verified'">-</span>
                                             <span v-else>-</span>
                                         </td>
                                     </tr>

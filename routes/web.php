@@ -247,6 +247,14 @@ Route::get('/fi-sejahtera/payment/start', [FiSejahteraController::class, 'paymen
     ->middleware(['auth'])
     ->name('fi-sejahtera.payment.start');
 
+Route::get('/fi-sejahtera/payment/pay', [FiSejahteraController::class, 'paymentPay'])
+    ->middleware(['auth'])
+    ->name('fi-sejahtera.payment.pay');
+
+Route::post('/fi-sejahtera/payment/submit-bkt', [FiSejahteraController::class, 'paymentSubmitToBkt'])
+    ->middleware(['auth'])
+    ->name('fi-sejahtera.payment.submit-bkt');
+
 Route::get('/fi-sejahtera/payment/return', [FiSejahteraController::class, 'handlePaymentReturn'])
     ->middleware(['auth'])
     ->name('fi-sejahtera.payment.return');

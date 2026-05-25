@@ -624,36 +624,16 @@ class FiSejahteraController extends Controller
             ])->with('error', 'Tiada jumlah bayaran untuk diteruskan.');
         }
 
-        $existingPaidSubmission = TaxSubmission::query()
-            ->where('hotel_id', $hotel->id)
-            ->where('month', $monthCode)
-            ->where('year', (int) $validated['year'])
-            ->where('payment_status', 'Berjaya')
-            ->latest('id')
-            ->first();
-
-        if ($existingPaidSubmission) {
-            return redirect()->route('fi-sejahtera.payment')->with('success', 'Bayaran untuk bulan dan tahun ini telah berjaya direkodkan.');
-        }
-
-        $secretKey = config('services.toyyibpay.key') ?? env('TOYYIBPAY_API_KEY');
-        $categoryCode = config('services.toyyibpay.category_code') ?? env('TOYYIBPAY_CATEGORY_CODE');
-
-        if (! $secretKey || ! $categoryCode) {
-            return redirect()->route('fi-sejahtera.perbendaharaan', [
-                'hotel_id' => $hotel->id,
-                'month' => $validated['month'],
-                'year' => $validated['year'],
-            ])->with('error', 'Tetapan ToyyibPay tidak lengkap. Sila hubungi pentadbir.');
-        }
-
         $submission = TaxSubmission::query()
             ->where('hotel_id', $hotel->id)
             ->where('month', $monthCode)
             ->where('year', (int) $validated['year'])
-            ->where('payment_status', '!=', 'Berjaya')
             ->latest('id')
             ->first();
+
+        if ($submission && in_array($submission->status, ['submitted_to_pbt', 'payment_pending', 'paid', 'submitted', 'bkt_verified', 'verified'], true)) {
+            return redirect()->route('fi-sejahtera.payment')->with('success', 'Laporan untuk bulan dan tahun ini telah diwujudkan. Sila teruskan di halaman dokumen pembayaran.');
+        }
 
         if (! $submission) {
             $submission = TaxSubmission::create([
@@ -663,76 +643,43 @@ class FiSejahteraController extends Controller
                 'payment_proof' => '',
                 'guest_report' => '',
                 'submitted_at' => now(),
-                'status' => 'payment_pending',
-                'payment_status' => 'Dalam Proses',
+                'status' => 'submitted_to_pbt',
+                'payment_status' => 'Belum Dibayar',
                 'payment_amount' => $amount,
-                'payment_attempted_at' => now(),
+                'payment_attempted_at' => null,
+                'payment_billcode' => null,
+                'payment_paid_at' => null,
                 'verified_at' => null,
                 'verified_by' => null,
                 'remarks' => null,
             ]);
         } else {
             $submission->update([
-                'payment_status' => 'Dalam Proses',
                 'payment_amount' => $amount,
-                'payment_attempted_at' => now(),
-                'status' => 'payment_pending',
+                'payment_attempted_at' => null,
+                'payment_billcode' => null,
+                'payment_paid_at' => null,
+                'payment_status' => 'Belum Dibayar',
+                'status' => 'submitted_to_pbt',
                 'verified_at' => null,
                 'verified_by' => null,
                 'remarks' => null,
             ]);
         }
 
-        $baseUrl = $this->toyyibpayBaseUrl();
-        $amountInCents = (int) round($amount * 100);
+        $oldGuestReport = $submission->guest_report;
+        $guestReportPath = $this->generateTaxGuestListDocument($submission);
 
-        $response = Http::asForm()->post($baseUrl.'/index.php/api/createBill', [
-            'userSecretKey' => $secretKey,
-            'categoryCode' => $categoryCode,
-            'billName' => 'Bayaran Fi Sejahtera',
-            'billDescription' => 'Bayaran fi sejahtera untuk '.$hotel->name,
-            'billPriceSetting' => 1,
-            'billPayorInfo' => 1,
-            'billAmount' => $amountInCents,
-            'billReturnUrl' => route('fi-sejahtera.payment.return'),
-            'billCallbackUrl' => route('fi-sejahtera.payment.callback'),
-            'billExternalReferenceNo' => (string) $submission->id,
-            'billTo' => auth()->user()?->name ?? 'Pemilik Hotel',
-            'billEmail' => auth()->user()?->email ?? 'no-reply@example.com',
-            'billPhone' => auth()->user()?->phone_number ?? '',
-        ]);
-
-        if (! $response->successful()) {
-            return redirect()->route('fi-sejahtera.perbendaharaan', [
-                'hotel_id' => $hotel->id,
-                'month' => $validated['month'],
-                'year' => $validated['year'],
-            ])->with('error', 'Gagal memulakan pembayaran ToyyibPay. Sila cuba lagi.');
-        }
-
-        $payload = $response->json();
-        $billCode = data_get($payload, '0.BillCode') ?? data_get($payload, 'BillCode');
-
-        if (! $billCode) {
-            return redirect()->route('fi-sejahtera.perbendaharaan', [
-                'hotel_id' => $hotel->id,
-                'month' => $validated['month'],
-                'year' => $validated['year'],
-            ])->with('error', 'Gagal mendapatkan kod pembayaran ToyyibPay.');
+        if ($oldGuestReport && $oldGuestReport !== $guestReportPath) {
+            Storage::disk('public')->delete($oldGuestReport);
         }
 
         $submission->update([
-            'payment_billcode' => (string) $billCode,
-            'payment_attempted_at' => now(),
+            'guest_report' => $guestReportPath,
+            'submitted_at' => now(),
         ]);
 
-        $paymentUrl = $baseUrl.'/'.$billCode;
-
-        if ($request->header('X-Inertia')) {
-            return Inertia::location($paymentUrl);
-        }
-
-        return redirect()->away($paymentUrl);
+        return redirect()->route('fi-sejahtera.payment')->with('success', 'Laporan berjaya dihantar kepada PBT untuk semakan.');
     }
 
     public function handlePaymentReturn(Request $request)
@@ -740,7 +687,7 @@ class FiSejahteraController extends Controller
         $billCode = $request->query('billcode') ?? $request->query('billCode');
 
         if (! $billCode) {
-            return redirect()->route('fi-sejahtera.perbendaharaan')->with('error', 'Maklumat pembayaran tidak ditemui.');
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Maklumat pembayaran tidak ditemui.');
         }
 
         $submission = TaxSubmission::query()
@@ -750,7 +697,7 @@ class FiSejahteraController extends Controller
             ->first();
 
         if (! $submission || $submission->hotel?->user_id !== auth()->id()) {
-            return redirect()->route('fi-sejahtera.perbendaharaan')->with('error', 'Rekod pembayaran tidak sah.');
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Rekod pembayaran tidak sah.');
         }
 
         $isSuccess = $this->syncTaxSubmissionPaymentStatus((string) $billCode, $submission);
@@ -758,7 +705,7 @@ class FiSejahteraController extends Controller
         return redirect()->route('fi-sejahtera.payment')->with(
             $isSuccess ? 'success' : 'error',
             $isSuccess
-                ? 'Pembayaran berjaya. Sila lengkapkan dokumen tambahan di bawah.'
+                ? 'Pembayaran berjaya. Sila klik Hantar untuk serahkan kepada BKT.'
                 : 'Pembayaran gagal. Sila cuba semula.'
         );
     }
@@ -785,6 +732,90 @@ class FiSejahteraController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
+    public function paymentPay(Request $request)
+    {
+        if ($redirect = $this->enforceFiSejahteraAccess()) {
+            return $redirect;
+        }
+
+        $this->ensureOwner();
+
+        $validated = $request->validate([
+            'submission_id' => ['required', 'integer', 'exists:tax_submissions,id'],
+        ]);
+
+        $submission = TaxSubmission::query()
+            ->with('hotel:id,user_id,name')
+            ->findOrFail((int) $validated['submission_id']);
+
+        if ($submission->hotel?->user_id !== auth()->id()) {
+            abort(403);
+        }
+
+        if ($submission->status !== 'payment_pending') {
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Pembayaran hanya boleh dibuat selepas laporan diluluskan oleh PBT.');
+        }
+
+        if (! $submission->hotel_guest_list) {
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Sila muat naik Senarai Tetamu (Sistem Hotel) sebelum membuat bayaran.');
+        }
+
+        if ($submission->payment_status === 'Berjaya') {
+            return redirect()->route('fi-sejahtera.payment')->with('success', 'Bayaran untuk laporan ini telah berjaya direkodkan.');
+        }
+
+        $secretKey = config('services.toyyibpay.key') ?? env('TOYYIBPAY_API_KEY');
+        $categoryCode = config('services.toyyibpay.category_code') ?? env('TOYYIBPAY_CATEGORY_CODE');
+
+        if (! $secretKey || ! $categoryCode) {
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Tetapan ToyyibPay tidak lengkap. Sila hubungi pentadbir.');
+        }
+
+        $baseUrl = $this->toyyibpayBaseUrl();
+        $amountInCents = (int) round(((float) $submission->payment_amount) * 100);
+
+        $response = Http::asForm()->post($baseUrl.'/index.php/api/createBill', [
+            'userSecretKey' => $secretKey,
+            'categoryCode' => $categoryCode,
+            'billName' => 'Bayaran Fi Sejahtera',
+            'billDescription' => 'Bayaran fi sejahtera untuk '.($submission->hotel?->name ?? 'Hotel'),
+            'billPriceSetting' => 1,
+            'billPayorInfo' => 1,
+            'billAmount' => $amountInCents,
+            'billReturnUrl' => route('fi-sejahtera.payment.return'),
+            'billCallbackUrl' => route('fi-sejahtera.payment.callback'),
+            'billExternalReferenceNo' => (string) $submission->id,
+            'billTo' => auth()->user()?->name ?? 'Pemilik Hotel',
+            'billEmail' => auth()->user()?->email ?? 'no-reply@example.com',
+            'billPhone' => auth()->user()?->phone_number ?? '',
+        ]);
+
+        if (! $response->successful()) {
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Gagal memulakan pembayaran ToyyibPay. Sila cuba lagi.');
+        }
+
+        $payload = $response->json();
+        $billCode = data_get($payload, '0.BillCode') ?? data_get($payload, 'BillCode');
+
+        if (! $billCode) {
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Gagal mendapatkan kod pembayaran ToyyibPay.');
+        }
+
+        $submission->update([
+            'payment_status' => 'Dalam Proses',
+            'payment_billcode' => (string) $billCode,
+            'payment_attempted_at' => now(),
+        ]);
+
+        $paymentUrl = $baseUrl.'/'.$billCode;
+
+        if ($request->header('X-Inertia')) {
+            return Inertia::location($paymentUrl);
+        }
+
+        return redirect()->away($paymentUrl);
+    }
+
     public function paymentStore(Request $request)
     {
         if ($redirect = $this->enforceFiSejahteraAccess()) {
@@ -807,9 +838,9 @@ class FiSejahteraController extends Controller
             abort(403);
         }
 
-        if ($submission->payment_status !== 'Berjaya') {
+        if ($submission->status !== 'payment_pending') {
             throw ValidationException::withMessages([
-                'hotel_guest_list' => 'Pembayaran belum berjaya. Sila lengkapkan bayaran terlebih dahulu.',
+                'hotel_guest_list' => 'Muat naik ini hanya dibenarkan selepas PBT meluluskan laporan.',
             ]);
         }
 
@@ -821,6 +852,40 @@ class FiSejahteraController extends Controller
 
         $submission->update([
             'hotel_guest_list' => $hotelGuestListPath,
+        ]);
+
+        return redirect()->route('fi-sejahtera.payment')->with('success', 'Senarai tetamu daripada sistem hotel berjaya dimuat naik. Anda kini boleh teruskan pembayaran.');
+    }
+
+    public function paymentSubmitToBkt(Request $request)
+    {
+        if ($redirect = $this->enforceFiSejahteraAccess()) {
+            return $redirect;
+        }
+
+        $this->ensureOwner();
+
+        $validated = $request->validate([
+            'submission_id' => ['required', 'integer', 'exists:tax_submissions,id'],
+        ]);
+
+        $submission = TaxSubmission::query()
+            ->with('hotel:id,user_id')
+            ->findOrFail((int) $validated['submission_id']);
+
+        if ($submission->hotel?->user_id !== auth()->id()) {
+            abort(403);
+        }
+
+        if ($submission->payment_status !== 'Berjaya') {
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Bayaran belum berjaya. Sila lengkapkan bayaran sebelum hantar kepada BKT.');
+        }
+
+        if (! $submission->hotel_guest_list) {
+            return redirect()->route('fi-sejahtera.payment')->with('error', 'Sila muat naik senarai tetamu sistem hotel sebelum hantar kepada BKT.');
+        }
+
+        $submission->update([
             'status' => 'submitted',
             'submitted_at' => now(),
             'verified_at' => null,
@@ -828,7 +893,7 @@ class FiSejahteraController extends Controller
             'remarks' => null,
         ]);
 
-        return redirect()->route('fi-sejahtera.payment')->with('success', 'Dokumen berjaya dihantar untuk semakan.');
+        return redirect()->route('fi-sejahtera.payment')->with('success', 'Laporan berjaya dihantar kepada BKT untuk semakan.');
     }
 
     public function dashboard(Request $request)
@@ -1437,8 +1502,8 @@ class FiSejahteraController extends Controller
                     'month' => $submission->month,
                     'year' => $submission->year,
                     'amount' => (float) $submission->payment_amount,
-                    'payment_proof_url' => Storage::url($submission->payment_proof),
-                    'guest_report_url' => Storage::url($submission->guest_report),
+                    'payment_proof_url' => $submission->payment_proof ? Storage::url($submission->payment_proof) : null,
+                    'guest_report_url' => $submission->guest_report ? Storage::url($submission->guest_report) : null,
                     'hotel_guest_list_url' => $submission->hotel_guest_list ? Storage::url($submission->hotel_guest_list) : null,
                     'submitted_at' => optional($submission->submitted_at)->toDateTimeString(),
                     'status' => $submission->status,
@@ -1451,8 +1516,12 @@ class FiSejahteraController extends Controller
 
         return Inertia::render('fi sejahtera/TaxList', [
             'submissions' => $submissions,
-            'isAdmin' => $this->isBktAdmin($user) || $this->isBendaharaAdmin($user),
-            'approverRole' => $this->isBendaharaAdmin($user) ? 'bendahara_admin' : ($this->isBktAdmin($user) ? 'bkt_admin' : null),
+            'isAdmin' => $this->isBktAdmin($user) || $this->isBendaharaAdmin($user) || $this->isPbtAdmin($user),
+            'approverRole' => $this->isBendaharaAdmin($user)
+                ? 'bendahara_admin'
+                : ($this->isBktAdmin($user)
+                    ? 'bkt_admin'
+                    : ($this->isPbtAdmin($user) ? 'pbt_admin' : null)),
         ]);
     }
 
@@ -1479,6 +1548,28 @@ class FiSejahteraController extends Controller
             ]);
 
             return redirect()->route('fi-sejahtera.tax')->with('success', 'Penghantaran cukai berjaya disahkan oleh Bendahara.');
+        }
+
+        if ($this->isPbtAdmin($user)) {
+            $this->ensurePbtAdminHasPbt($user);
+            $submissionPbtName = trim((string) optional($taxSubmission->hotel)->pbt_name);
+
+            if ($submissionPbtName === '' || $submissionPbtName !== $this->pbtAdminName($user)) {
+                abort(403);
+            }
+
+            if (! in_array($taxSubmission->status, ['submitted_to_pbt', 'rejected'], true)) {
+                return redirect()->route('fi-sejahtera.tax')->with('error', 'Hanya laporan yang dihantar kepada PBT boleh diluluskan.');
+            }
+
+            $taxSubmission->update([
+                'status' => 'payment_pending',
+                'verified_at' => now(),
+                'verified_by' => auth()->id(),
+                'remarks' => null,
+            ]);
+
+            return redirect()->route('fi-sejahtera.tax')->with('success', 'Laporan berjaya diluluskan oleh PBT. Pemilik hotel kini boleh membuat bayaran.');
         }
 
         $this->ensureBktAdmin();
@@ -1510,6 +1601,17 @@ class FiSejahteraController extends Controller
         if ($this->isBendaharaAdmin($user)) {
             if ($taxSubmission->status !== 'bkt_verified') {
                 return redirect()->route('fi-sejahtera.tax')->with('error', 'Hanya penghantaran yang telah diluluskan BKT boleh ditolak oleh Bendahara.');
+            }
+        } elseif ($this->isPbtAdmin($user)) {
+            $this->ensurePbtAdminHasPbt($user);
+            $submissionPbtName = trim((string) optional($taxSubmission->hotel)->pbt_name);
+
+            if ($submissionPbtName === '' || $submissionPbtName !== $this->pbtAdminName($user)) {
+                abort(403);
+            }
+
+            if (! in_array($taxSubmission->status, ['submitted_to_pbt', 'rejected'], true)) {
+                return redirect()->route('fi-sejahtera.tax')->with('error', 'Hanya laporan yang dihantar kepada PBT boleh ditolak.');
             }
         } else {
             $this->ensureBktAdmin();

@@ -15,8 +15,8 @@ interface TaxSubmissionRow {
 	month: string;
 	year: number;
 	amount?: number;
-	payment_proof_url: string;
-	guest_report_url: string;
+	payment_proof_url?: string | null;
+	guest_report_url?: string | null;
 	hotel_guest_list_url?: string | null;
 	submitted_at?: string;
 	status: string;
@@ -80,8 +80,12 @@ function formatMonth(month: string) {
 }
 
 function formatStatusLabel(status: string) {
+	if (status === 'submitted_to_pbt') {
+		return 'Dihantar ke PBT';
+	}
+
 	if (status === 'submitted') {
-		return 'Dihantar';
+		return 'Dihantar ke BKT';
 	}
 
 	if (status === 'paid') {
@@ -96,10 +100,6 @@ function formatStatusLabel(status: string) {
 		return 'Menunggu Pembayaran';
 	}
 
-	if (status === 'bkt_verified') {
-		return 'bg-indigo-100 text-indigo-700';
-	}
-
 	if (status === 'verified') {
 		return 'Disahkan';
 	}
@@ -112,6 +112,10 @@ function formatStatusLabel(status: string) {
 }
 
 function statusBadgeClass(status: string) {
+	if (status === 'submitted_to_pbt') {
+		return 'bg-violet-100 text-violet-700';
+	}
+
 	if (status === 'verified') {
 		return 'bg-green-100 text-green-700';
 	}
@@ -126,6 +130,10 @@ function statusBadgeClass(status: string) {
 
 	if (status === 'payment_pending') {
 		return 'bg-orange-100 text-orange-700';
+	}
+
+	if (status === 'bkt_verified') {
+		return 'bg-indigo-100 text-indigo-700';
 	}
 
 	return 'bg-yellow-100 text-yellow-700';
@@ -170,6 +178,10 @@ function canApproveSubmission(submission: TaxSubmissionRow) {
 		return false;
 	}
 
+	if (approverRole.value === 'pbt_admin') {
+		return submission.status === 'submitted_to_pbt' || submission.status === 'rejected';
+	}
+
 	if (approverRole.value === 'bendahara_admin') {
 		return submission.status === 'bkt_verified';
 	}
@@ -180,6 +192,10 @@ function canApproveSubmission(submission: TaxSubmissionRow) {
 function canRejectSubmission(submission: TaxSubmissionRow) {
 	if (!isAdmin.value) {
 		return false;
+	}
+
+	if (approverRole.value === 'pbt_admin') {
+		return submission.status === 'submitted_to_pbt' || submission.status === 'rejected';
 	}
 
 	if (approverRole.value === 'bendahara_admin') {
@@ -313,10 +329,12 @@ function resetFilter() {
 										<td class="p-2">{{ formatMonth(submission.month) }} {{ submission.year }}</td>
 										<td class="p-2">{{ formatAmount(submission.amount) }}</td>
 										<td class="p-2">
-											<a :href="submission.payment_proof_url" target="_blank" class="text-blue-600 hover:underline">Lihat</a>
+											<a v-if="submission.payment_proof_url" :href="submission.payment_proof_url" target="_blank" class="text-blue-600 hover:underline">Lihat</a>
+											<span v-else>-</span>
 										</td>
 										<td class="p-2">
-											<a :href="submission.guest_report_url" target="_blank" class="text-blue-600 hover:underline">Lihat</a>
+											<a v-if="submission.guest_report_url" :href="submission.guest_report_url" target="_blank" class="text-blue-600 hover:underline">Lihat</a>
+											<span v-else>-</span>
 										</td>
 										<td class="p-2">
 											<a v-if="submission.hotel_guest_list_url" :href="submission.hotel_guest_list_url" target="_blank" class="text-blue-600 hover:underline">Lihat</a>

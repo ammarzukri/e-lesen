@@ -27,6 +27,7 @@ interface ApplicantInfo {
 }
 
 const props = defineProps<{
+  currentUserId?: number | null
   initialApplicantInfo?: Partial<ApplicantInfo> | null
   processFeePayment?: {
     status?: string | null
@@ -68,7 +69,12 @@ const isProcessFeeLoading = ref(false)
 const processFeeStatusMessage = ref('')
 let processFeeStatusInterval: ReturnType<typeof setInterval> | null = null
 let draftAutosaveTimeout: ReturnType<typeof setTimeout> | null = null
-const LICENSE_APPLICATION_DRAFT_KEY = 'license-application-create-draft-v1'
+const LEGACY_LICENSE_APPLICATION_DRAFT_KEY = 'license-application-create-draft-v1'
+
+const currentUserDraftKey = computed(() => {
+  const userId = props.currentUserId
+  return userId ? `license-application-create-draft-v1-user-${userId}` : LEGACY_LICENSE_APPLICATION_DRAFT_KEY
+})
 
 function goToStep(targetStep: number) {
   if (targetStep < 1 || targetStep > stepTitles.length) return
@@ -160,9 +166,8 @@ const form = ref({
     company_registration_expiry_date: '',
     company_category: '',
     company_premises_location: '',
-    license_type: [
-      { aktiviti: '', keluasan: '', unit_bilik: '' }
-    ],
+    license_type_selected: '',
+    room_count: '',
     employee_malay: '',
     employee_chinese: '',
     employee_indian: '',
@@ -182,7 +187,7 @@ const form = ref({
   advertisment_info: {
     address: '',
     dynamic_table_rows: [
-      { type: '', structure: '', length: '', width: '', number_of_ads: '' },
+      { kod_hasil: '', jenis_perniagaan: '', aktiviti: '', amaun: '' },
     ],
   },
   declaration: {
@@ -339,6 +344,7 @@ function createFormDraftSnapshot() {
 function persistFormDraft() {
   try {
     const payload = {
+      userId: props.currentUserId ?? null,
       step: step.value,
       form: createFormDraftSnapshot(),
       processFeeStatus: processFeeStatus.value,
@@ -346,7 +352,7 @@ function persistFormDraft() {
       updatedAt: new Date().toISOString(),
     }
 
-    localStorage.setItem(LICENSE_APPLICATION_DRAFT_KEY, JSON.stringify(payload))
+    localStorage.setItem(currentUserDraftKey.value, JSON.stringify(payload))
   } catch (error) {
     console.error('Failed to save license application draft', error)
   }
@@ -354,14 +360,20 @@ function persistFormDraft() {
 
 function restoreFormDraft() {
   try {
-    const raw = localStorage.getItem(LICENSE_APPLICATION_DRAFT_KEY)
+    const raw = localStorage.getItem(currentUserDraftKey.value)
     if (!raw) return
 
     const draft = JSON.parse(raw) as {
+      userId?: number | null
       step?: number
       form?: Record<string, unknown>
       processFeeStatus?: string
       processFeeBillCode?: string
+    }
+
+    if ((draft.userId ?? null) !== (props.currentUserId ?? null)) {
+      localStorage.removeItem(currentUserDraftKey.value)
+      return
     }
 
     if (draft.form) {
@@ -400,8 +412,8 @@ function restoreFormDraft() {
 
     if (returnFromProcessFeePayment) {
       step.value = 6
-    } else if (typeof draft.step === 'number' && draft.step >= 1 && draft.step <= stepTitles.length) {
-      step.value = draft.step
+    } else {
+      step.value = 1
     }
   } catch (error) {
     console.error('Failed to restore license application draft', error)
@@ -410,7 +422,7 @@ function restoreFormDraft() {
 
 function clearFormDraft() {
   try {
-    localStorage.removeItem(LICENSE_APPLICATION_DRAFT_KEY)
+    localStorage.removeItem(currentUserDraftKey.value)
   } catch (error) {
     console.error('Failed to clear license application draft', error)
   }
@@ -548,7 +560,12 @@ async function startProcessFeePayment() {
   processFeeStatusMessage.value = ''
 
   try {
-    const response = await fetch('/license/process-fee/start', {
+    const billPhone = (form.value.applicant_info.phone_number || '').trim()
+    const startUrl = billPhone
+      ? `/license/process-fee/start?bill_phone=${encodeURIComponent(billPhone)}`
+      : '/license/process-fee/start'
+
+    const response = await fetch(startUrl, {
       method: 'GET',
       credentials: 'same-origin',
       headers: {
@@ -633,6 +650,11 @@ watch(
 )
 
 onMounted(() => {
+  // Cleanup pre-user-scoped draft key from older implementation.
+  if (LEGACY_LICENSE_APPLICATION_DRAFT_KEY !== currentUserDraftKey.value) {
+    localStorage.removeItem(LEGACY_LICENSE_APPLICATION_DRAFT_KEY)
+  }
+
   restoreFormDraft()
 
   if (props.processFeePayment?.paid) {
@@ -701,14 +723,26 @@ function submitForm() {
     }))
     .filter((doc) => doc.file)
 
-  const { license_type, ...companyInfo } = form.value.company_info
+  const { license_type_selected, room_count, ...companyInfo } = form.value.company_info
+
+  const license_type = license_type_selected
+    ? [{ aktiviti: license_type_selected, keluasan: '', unit_bilik: room_count || '' }]
+    : []
+
+  const advertisementInfoPayload = form.value.advertisment_info.dynamic_table_rows.map((row) => ({
+    type: row.kod_hasil,
+    structure: row.jenis_perniagaan,
+    length: row.aktiviti,
+    width: row.amaun,
+    number_of_ads: '',
+  }))
 
   const payload = {
     pbt_name: form.value.pbt_name,
     applicant_info: form.value.applicant_info,
     company_info: companyInfo,
     license_type,
-    advertisement_info: form.value.advertisment_info.dynamic_table_rows,
+    advertisement_info: advertisementInfoPayload,
     processing_fee: {
       amount: processingFeeAmountInCents,
       paid: form.value.processing_fee_paid,
@@ -749,7 +783,7 @@ function submitForm() {
 }
 
 function addAdvertismentRow() {
-  form.value.advertisment_info.dynamic_table_rows.push({ type: '', structure: '', length: '', width: '', number_of_ads: '' })
+  form.value.advertisment_info.dynamic_table_rows.push({ kod_hasil: '', jenis_perniagaan: '', aktiviti: '', amaun: '' })
 }
 
 function removeAdvertismentRow(index: number) {
@@ -758,15 +792,21 @@ function removeAdvertismentRow(index: number) {
   }
 }
 
-function addLicenseTypeRow() {
-  form.value.company_info.license_type.push({ aktiviti: '', keluasan: '', unit_bilik: '' })
-}
+const licenseTypeOptions = [
+  { value: 'homestay_island', label: '"Homestay", "Kampungstay", dan "Townstay" di pulau, tasik, atau seumpamanya' },
+  { value: 'homestay_land', label: '"Homestay", "Kampungstay", dan "Townstay" selain di pulau, tasik, atau seumpamanya' },
+  { value: 'campsite_island', label: 'Tapak perkhemahan dan tapak perkhemahan mewah di pulau, tasik, atau seumpamanya' },
+  { value: 'campsite_land', label: 'Tapak perkhemahan dan tapak perkhemahan mewah selain di pulau, tasik, atau seumpamanya' },
+  { value: 'rv_site', label: 'Tapak kenderaan rekreasi' },
+  { value: 'houseboat_raft_kelong', label: 'Rumah bot, rumah rakit, dan kelong' },
+  { value: 'others_island', label: 'Mana-mana rumah tumpangan lain di pulau, tasik, atau seumpamanya' },
+  { value: 'others_land', label: 'Mana-mana rumah tumpangan lain selain di pulau, tasik, atau seumpamanya' },
+]
 
-function removeLicenseTypeRow(index: number) {
-  if (form.value.company_info.license_type.length > 1) {
-    form.value.company_info.license_type.splice(index, 1)
-  }
-}
+const selectedLicenseTypeLabel = computed(() => {
+  const selected = licenseTypeOptions.find((option) => option.value === form.value.company_info.license_type_selected)
+  return selected?.label ?? ''
+})
 
 const advertismentOptions1 = [
   'Bersinar',
@@ -875,15 +915,15 @@ const companyCategoryDescriptions: Record<string, CompanyCategoryInfo> = {
   },
 }
 
-const selectedCompanyCategoryInformation = computed(() => {
-  const selectedCategory = form.value.company_info.company_category
+// const selectedCompanyCategoryInformation = computed(() => {
+//   const selectedCategory = form.value.company_info.company_category
 
-  if (!selectedCategory) {
-    return null
-  }
+//   if (!selectedCategory) {
+//     return null
+//   }
 
-  return companyCategoryDescriptions[selectedCategory] ?? null
-})
+//   return companyCategoryDescriptions[selectedCategory] ?? null
+// })
 
 function handleDocumentChange(index: number, event: Event) {
   const input = event.target as HTMLInputElement
@@ -1080,7 +1120,7 @@ function getPbtCardClass(index: number) {
             </div>
 
             <div>
-                    <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Tempat Lahir</label>
+              <label class="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-200">Tempat Lahir</label>
               <select v-model="form.applicant_info.birth_place"
                       class="input border border-gray-300 w-full px-3 py-2 rounded-xl dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
                 <option value="">-- Pilih Negeri --</option>
@@ -1487,67 +1527,46 @@ function getPbtCardClass(index: number) {
           <h2 class="text-xl font-bold mb-4 text-slate-900 dark:text-slate-100">Maklumat Tambahan</h2>
           <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
 
-          <div class="mt-4">
-            <div class="overflow-auto">
-              <div class="flex justify-between items-center mb-2">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Jenis Lesen Yang Dipohon</h2>
-                <button type="button" @click="addLicenseTypeRow"
-                  class="px-3 py-1 bg-green-600 text-white rounded-xl dark:bg-green-500">Add Row</button>
-              </div>
-              <table class="w-full table-auto border-collapse text-slate-900 dark:text-slate-100">
-                <thead>
-                  <tr class="bg-gray-100 dark:bg-slate-800">
-                    <th class="border px-2 py-1 text-center">No</th>
-                    <th class="border px-2 py-1 text-left">Aktiviti Perniagaan Dijalankan</th>
-                    <th class="border px-2 py-1 text-left">Keluasan (m³)</th>
-                    <th class="border px-2 py-1 text-left">Unit / Bil Bilik</th>
-                    <th class="border px-2 py-1 text-center">Tindakan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, rIndex) in form.company_info.license_type" :key="rIndex">
-                    <td class="border px-2 py-1 text-center">{{ rIndex + 1 }}</td>
-                    <td class="border px-2 py-1">
-                      <input v-model="row.aktiviti"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                    </td>
-                    <td class="border px-2 py-1">
-                      <input v-model="row.keluasan" inputmode="numeric" pattern="[0-9]*"
-                        @input="row.keluasan = enforceNumericValue($event)"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                    </td>
-                    <td class="border px-2 py-1">
-                      <input v-model="row.unit_bilik" inputmode="numeric" pattern="[0-9]*"
-                        @input="row.unit_bilik = enforceNumericValue($event)"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                    </td>
-                    <td class="border px-2 py-1 text-center">
-                      <button type="button" @click="removeLicenseTypeRow(rIndex)"
-                        class="px-2 py-1 bg-red-600 text-white rounded-xl dark:bg-red-500"
-                        :disabled="form.company_info.license_type.length <= 1">Remove</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+          <div class="mt-4 space-y-6">
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Jenis Lesen Yang Dipohon</h2>
+              <select
+                v-model="form.company_info.license_type_selected"
+                class="w-full md:w-1/2 px-3 py-2 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
+              >
+                <option value="">-- Pilih Jenis Lesen --</option>
+                <option v-for="option in licenseTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </div>
+
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Bilangan Bilik</h2>
+              <input
+                v-model="form.company_info.room_count"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                @input="form.company_info.room_count = enforceNumericValue($event)"
+                class="w-full md:w-1/2 px-3 py-2 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
+                placeholder="Masukkan bilangan bilik"
+              />
             </div>
 
             <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
 
             <div class="overflow-auto">
               <div class="flex justify-between items-center mb-2">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Maklumat Iklan / Papan Tanda</h2>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Aktiviti Tambahan</h2>
                 <button type="button" @click="addAdvertismentRow"
-                  class="px-3 py-1 bg-green-600 text-white rounded-xl dark:bg-green-500">Add Row</button>
+                  class="px-3 py-1 bg-green-600 text-white rounded-xl dark:bg-green-500">Tambah</button>
               </div>
               <table class="w-full table-auto border-collapse text-slate-900 dark:text-slate-100">
                 <thead>
                   <tr class="bg-gray-100 dark:bg-slate-800">
                     <th class="border px-2 py-1 text-center">No</th>
-                    <th class="border px-2 py-1 text-left">Jenis Iklan</th>
-                    <th class="border px-2 py-1 text-left">Cara Pemasangan</th>
-                    <th class="border px-2 py-1 text-left">Panjang (M)</th>
-                    <th class="border px-2 py-1 text-left">Lebar (M)</th>
-                    <th class="border px-2 py-1 text-left">Bil Iklan</th>
+                    <th class="border px-2 py-1 text-left">Kod Hasil</th>
+                    <th class="border px-2 py-1 text-left">Jenis Perniagaan</th>
+                    <th class="border px-2 py-1 text-left">Aktiviti</th>
+                    <th class="border px-2 py-1 text-left">Amaun (RM)</th>
                     <th class="border px-2 py-1 text-center">Tindakan</th>
                   </tr>
                 </thead>
@@ -1555,38 +1574,26 @@ function getPbtCardClass(index: number) {
                   <tr v-for="(row, rIndex) in form.advertisment_info.dynamic_table_rows" :key="rIndex">
                     <td class="border px-2 py-1 text-center">{{ rIndex + 1 }}</td>
                     <td class="border px-2 py-1">
-                      <select v-model="row.type"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
-                        <option value="">-- Pilih --</option>
-                        <option v-for="opt in advertismentOptions1" :key="opt" :value="opt">{{ opt }}</option>
-                      </select>
-                    </td>
-                    <td class="border px-2 py-1">
-                      <select v-model="row.structure"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
-                        <option value="">-- Pilih --</option>
-                        <option v-for="opt in advertismentOptions2" :key="opt" :value="opt">{{ opt }}</option>
-                      </select>
-                    </td>
-                    <td class="border px-2 py-1">
-                      <input v-model="row.length" inputmode="numeric" pattern="[0-9]*"
-                        @input="row.length = enforceNumericValue($event)"
+                      <input v-model="row.kod_hasil"
                         class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
                     </td>
                     <td class="border px-2 py-1">
-                      <input v-model="row.width" inputmode="numeric" pattern="[0-9]*"
-                        @input="row.width = enforceNumericValue($event)"
+                      <input v-model="row.jenis_perniagaan"
                         class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
                     </td>
                     <td class="border px-2 py-1">
-                      <input v-model="row.number_of_ads" inputmode="numeric" pattern="[0-9]*"
-                        @input="row.number_of_ads = enforceNumericValue($event)"
+                      <input v-model="row.aktiviti"
+                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
+                    </td>
+                    <td class="border px-2 py-1">
+                      <input v-model="row.amaun" inputmode="numeric" pattern="[0-9]*"
+                        @input="row.amaun = enforceNumericValue($event)"
                         class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
                     </td>
                     <td class="border px-2 py-1 text-center">
                       <button type="button" @click="removeAdvertismentRow(rIndex)"
                         class="px-2 py-1 bg-red-600 text-white rounded-xl dark:bg-red-500"
-                        :disabled="form.advertisment_info.dynamic_table_rows.length <= 1">Remove</button>
+                        :disabled="form.advertisment_info.dynamic_table_rows.length <= 1">Buang</button>
                     </td>
                   </tr>
                 </tbody>
@@ -1999,22 +2006,15 @@ function getPbtCardClass(index: number) {
 
                 <div class="mt-6">
                   <div class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Jenis Lesen Yang Dipohon</div>
-                  <div class="space-y-3">
-                    <div v-for="(row, idx) in form.company_info.license_type" :key="`summary-license-${idx}`" class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-                      <div class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Lesen #{{ idx + 1 }}</div>
-                      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Aktiviti</div>
-                          <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.aktiviti || '-' }}</div>
-                        </div>
-                        <div>
-                          <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Keluasan (m³)</div>
-                          <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.keluasan || '-' }}</div>
-                        </div>
-                        <div>
-                          <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Unit / Bil Bilik</div>
-                          <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.unit_bilik || '-' }}</div>
-                        </div>
+                  <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Jenis Lesen</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ selectedLicenseTypeLabel || '-' }}</div>
+                      </div>
+                      <div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Bilangan Bilik</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ form.company_info.room_count || '-' }}</div>
                       </div>
                     </div>
                   </div>
@@ -2026,26 +2026,22 @@ function getPbtCardClass(index: number) {
                 <div class="space-y-3">
                   <div v-for="(row, idx) in form.advertisment_info.dynamic_table_rows" :key="`summary-ads-${idx}`" class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
                     <div class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Iklan #{{ idx + 1 }}</div>
-                    <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Jenis Iklan</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.type || '-' }}</div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Kod Hasil</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.kod_hasil || '-' }}</div>
                       </div>
                       <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Cara Pemasangan</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.structure || '-' }}</div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Jenis Perniagaan</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.jenis_perniagaan || '-' }}</div>
                       </div>
                       <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Panjang (M)</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.length || '-' }}</div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Aktiviti</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.aktiviti || '-' }}</div>
                       </div>
                       <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Lebar (M)</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.width || '-' }}</div>
-                      </div>
-                      <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Bil Iklan</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.number_of_ads || '-' }}</div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Amaun</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.amaun || '-' }}</div>
                       </div>
                     </div>
                   </div>
