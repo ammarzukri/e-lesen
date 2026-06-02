@@ -171,6 +171,43 @@ const additionalActivityConfigs = [
 
 type AdditionalActivityKey = (typeof additionalActivityConfigs)[number]['key']
 
+const additionalActivityPricing: Record<
+  AdditionalActivityKey,
+  {
+    flatRate?: number
+    jenisRate?: Record<string, number>
+    perUnitRate?: number
+  }
+> = {
+  papan_iklan: {
+    jenisRate: {
+      Bersinar: 300,
+      'Tidak Bersinar': 200,
+    },
+  },
+  permit_sementara_papan_tanda: {
+    flatRate: 150,
+  },
+  billiard_snooker: {
+    perUnitRate: 120,
+  },
+  karaoke: {
+    jenisRate: {
+      Terbuka: 250,
+      Tertutup: 300,
+    },
+  },
+  gym: {
+    flatRate: 300,
+  },
+  kedai_serbaneka: {
+    flatRate: 180,
+  },
+  pusat_penjagaan: {
+    flatRate: 220,
+  },
+}
+
 function hasJenisColumn(activityKey: AdditionalActivityKey) {
   return additionalActivityConfigs.find((config) => config.key === activityKey)?.hasJenis ?? false
 }
@@ -178,6 +215,41 @@ function hasJenisColumn(activityKey: AdditionalActivityKey) {
 function getActivityConfig(activityKey: AdditionalActivityKey) {
   return additionalActivityConfigs.find((config) => config.key === activityKey)
 }
+
+function getActivityAmount(activityKey: AdditionalActivityKey, jenisValue?: string) {
+  const pricing = additionalActivityPricing[activityKey]
+  if (!pricing) return 0
+
+  if (typeof pricing.perUnitRate === 'number') {
+    const quantity = Number((jenisValue ?? '').trim())
+    if (Number.isNaN(quantity) || quantity <= 0) return 0
+    return quantity * pricing.perUnitRate
+  }
+
+  if (pricing.jenisRate) {
+    return pricing.jenisRate[jenisValue ?? ''] ?? 0
+  }
+
+  return pricing.flatRate ?? 0
+}
+
+function formatAmount(value: number) {
+  return new Intl.NumberFormat('ms-MY', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+}
+
+const additionalActivitiesTotalAmount = computed(() => {
+  return form.value.advertisment_info.selected_activities.reduce((total, activityKey) => {
+    const rows = form.value.advertisment_info.activity_tables[activityKey] ?? []
+    const activityTotal = rows.reduce((rowTotal, row) => {
+      return rowTotal + getActivityAmount(activityKey, row.jenis)
+    }, 0)
+
+    return total + activityTotal
+  }, 0)
+})
 
 const districtMap: Record<string, string[]> = {
   Johor: ['Batu Pahat', 'Johor Bahru', 'Kluang', 'Kota Tinggi', 'Kulai', 'Mersing', 'Muar', 'Pontian', 'Segamat', 'Tangkak'],
@@ -1674,6 +1746,7 @@ function getPbtCardClass(index: number) {
                       <th class="border px-2 py-1 text-center">No</th>
                       <th v-if="activity.hasJenis" class="border px-2 py-1 text-left">{{ activity.jenisLabel }}</th>
                       <th class="border px-2 py-1 text-left">Keluasan (MPS)</th>
+                      <th class="border px-2 py-1 text-right">Amaun (RM)</th>
                       <th class="border px-2 py-1 text-center">Tindakan</th>
                     </tr>
                   </thead>
@@ -1724,6 +1797,9 @@ function getPbtCardClass(index: number) {
                           placeholder="Masukkan keluasan"
                         />
                       </td>
+                      <td class="border px-2 py-1 text-right font-semibold tabular-nums">
+                        {{ formatAmount(getActivityAmount(activity.key, row.jenis)) }}
+                      </td>
                       <td class="border px-2 py-1 text-center">
                         <button
                           type="button"
@@ -1737,6 +1813,11 @@ function getPbtCardClass(index: number) {
                     </tr>
                   </tbody>
                 </table>
+              </div>
+
+              <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right dark:border-slate-700 dark:bg-slate-900/50">
+                <span class="text-sm font-semibold text-slate-700 dark:text-slate-200">Jumlah Amaun Aktiviti Tambahan:</span>
+                <span class="ml-2 text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">RM{{ formatAmount(additionalActivitiesTotalAmount) }}</span>
               </div>
             </div>
           </div>
@@ -2176,7 +2257,7 @@ function getPbtCardClass(index: number) {
                     <div
                       v-for="(row, idx) in form.advertisment_info.activity_tables[activity.key]"
                       :key="`summary-${activity.key}-${idx}`"
-                      class="grid grid-cols-1 gap-3 border-t border-slate-200 py-2 first:border-t-0 dark:border-slate-700 md:grid-cols-3"
+                      class="grid grid-cols-1 gap-3 border-t border-slate-200 py-2 first:border-t-0 dark:border-slate-700 md:grid-cols-4"
                     >
                       <div>
                         <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">No</div>
@@ -2190,7 +2271,16 @@ function getPbtCardClass(index: number) {
                         <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Keluasan (MPS)</div>
                         <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.keluasan || '-' }}</div>
                       </div>
+                      <div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Amaun (RM)</div>
+                        <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ formatAmount(getActivityAmount(activity.key, row.jenis)) }}</div>
+                      </div>
                     </div>
+                  </div>
+
+                  <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-900/50">
+                    <span class="text-xs font-semibold text-slate-600 dark:text-slate-400">Jumlah Amaun Aktiviti Tambahan:</span>
+                    <span class="ml-2 text-sm font-bold text-slate-900 dark:text-slate-100">RM{{ formatAmount(additionalActivitiesTotalAmount) }}</span>
                   </div>
                 </div>
               </section>
