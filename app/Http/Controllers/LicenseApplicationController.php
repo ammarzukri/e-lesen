@@ -911,7 +911,7 @@ class LicenseApplicationController extends Controller
         $this->ensureAdmin();
         $this->authorizePbtAdminApplication($application);
 
-        $application->load(['user', 'licenseTypes', 'advertisementInfos', 'documents', 'hotel.license']);
+        $application->load(['user', 'licenseTypes', 'additionalInfos', 'documents', 'hotel.license']);
         $application = $this->hydrateApplicantFromUser($application);
 
         return Inertia::render('e-lesen/admin/LicenseApplicationShow', [
@@ -1214,6 +1214,8 @@ class LicenseApplicationController extends Controller
                 'company_registration_expiry_date' => $company['company_registration_expiry_date'] ?? null,
                 'company_category' => $company['company_category'] ?? null,
                 'company_premises_location' => $company['company_premises_location'] ?? null,
+                'license_type_selected' => $company['license_type_selected'] ?? null,
+                'room_count' => $company['room_count'] ?? null,
                 'employee_malay' => $company['employee_malay'] ?? null,
                 'employee_chinese' => $company['employee_chinese'] ?? null,
                 'employee_indian' => $company['employee_indian'] ?? null,
@@ -1227,29 +1229,15 @@ class LicenseApplicationController extends Controller
                 'company_phone_hq' => $company['company_phone_hq'] ?? null,
             ]);
 
-            $licenseTypes = $request->input('license_type', []);
-            foreach ($licenseTypes as $row) {
+            $additionalInfos = $request->input('advertisement_info', []);
+            foreach ($additionalInfos as $row) {
                 if (!array_filter($row ?? [])) {
                     continue;
                 }
-                $licenseApplication->licenseTypes()->create([
-                    'aktiviti' => $row['aktiviti'] ?? null,
-                    'keluasan' => $row['keluasan'] ?? null,
-                    'unit_bilik' => $row['unit_bilik'] ?? null,
-                ]);
-            }
-
-            $advertisements = $request->input('advertisement_info', []);
-            foreach ($advertisements as $row) {
-                if (!array_filter($row ?? [])) {
-                    continue;
-                }
-                $licenseApplication->advertisementInfos()->create([
-                    'type' => $row['type'] ?? null,
-                    'structure' => $row['structure'] ?? null,
-                    'length' => $row['length'] ?? null,
-                    'width' => $row['width'] ?? null,
-                    'number_of_ads' => $row['number_of_ads'] ?? null,
+                $licenseApplication->additionalInfos()->create([
+                    'activity_type' => $row['activity_type'] ?? $row['type'] ?? null,
+                    'jenis' => $row['jenis'] ?? $row['structure'] ?? null,
+                    'keluasan_mps' => $row['keluasan_mps'] ?? $row['length'] ?? null,
                 ]);
             }
 

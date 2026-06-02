@@ -11,11 +11,9 @@ type LicenseType = {
 };
 
 type AdvertisementInfo = {
-    type?: string;
-    structure?: string;
-    length?: string;
-    width?: string;
-    number_of_ads?: string;
+    activity_type?: string;
+    jenis?: string;
+    keluasan_mps?: string;
 };
 
 type LicenseDocument = {
@@ -68,6 +66,8 @@ type LicenseApplication = {
     company_registration_expiry_date?: string;
     company_category?: string;
     company_premises_location?: string;
+    license_type_selected?: string;
+    room_count?: string;
     employee_malay?: string;
     employee_chinese?: string;
     employee_indian?: string;
@@ -82,7 +82,7 @@ type LicenseApplication = {
     status?: string;
     created_at?: string;
     license_types?: LicenseType[];
-    advertisement_infos?: AdvertisementInfo[];
+    additional_infos?: AdvertisementInfo[];
     documents?: LicenseDocument[];
     payment_status?: string;
     payment_amount?: string;
@@ -102,6 +102,27 @@ const documentTypeMap: Record<string, string> = {
     senarai_nama_semua_pengendali_makanan: 'Senarai Nama Pengendali Makanan / Pembantu',
     carta_proses_pengeluaran: 'Carta Proses Pengeluaran Pengilangan / Pemerosesan',
 }
+
+const licenseTypeLabelMap: Record<string, string> = {
+    homestay_island: '"Homestay", "Kampungstay", dan "Townstay" di pulau, tasik, atau seumpamanya',
+    homestay_land: '"Homestay", "Kampungstay", dan "Townstay" selain di pulau, tasik, atau seumpamanya',
+    campsite_island: 'Tapak perkhemahan dan tapak perkhemahan mewah di pulau, tasik, atau seumpamanya',
+    campsite_land: 'Tapak perkhemahan dan tapak perkhemahan mewah selain di pulau, tasik, atau seumpamanya',
+    rv_site: 'Tapak kenderaan rekreasi',
+    houseboat_raft_kelong: 'Rumah bot, rumah rakit, dan kelong',
+    others_island: 'Mana-mana rumah tumpangan lain di pulau, tasik, atau seumpamanya',
+    others_land: 'Mana-mana rumah tumpangan lain selain di pulau, tasik, atau seumpamanya',
+};
+
+const activityTypeLabelMap: Record<string, string> = {
+    papan_iklan: 'Papan Iklan',
+    permit_sementara_papan_tanda: 'Permit Sementara Papan Tanda',
+    billiard_snooker: 'Billiard/Snooker',
+    karaoke: 'Karaoke',
+    gym: 'Gym',
+    kedai_serbaneka: 'Kedai Serbaneka',
+    pusat_penjagaan: 'Pusat Penjagaan Kesihatan, Kecantikan, dan Seumpamanya',
+};
 
 const props = defineProps<{
     application: LicenseApplication;
@@ -169,6 +190,28 @@ function formatCurrency(value?: string | number) {
     const cents = Number(value);
     if (Number.isNaN(cents)) return '-';
     return (cents / 100).toFixed(2);
+}
+
+function formatLicenseType(value?: string) {
+    if (!value) return '-';
+    return licenseTypeLabelMap[value] || value;
+}
+
+function formatActivityType(value?: string) {
+    if (!value) return '-';
+    return activityTypeLabelMap[value] || value;
+}
+
+function activityJenisLabel(value?: string) {
+    if (value === 'billiard_snooker') {
+        return 'Bilangan Meja';
+    }
+
+    if (value === 'papan_iklan' || value === 'karaoke') {
+        return 'Jenis';
+    }
+
+    return '';
 }
 
 function licenseStatusBadgeClass(status?: string) {
@@ -567,7 +610,7 @@ function reject() {
                                 <div
                                     class="text-sm font-semibold text-slate-600 dark:text-slate-400"
                                 >
-                                    Nama Syarikat
+                                    Nama Perniagaan / Syarikat
                                 </div>
                                 <div
                                     class="text-md text-slate-900 dark:text-slate-100"
@@ -579,7 +622,7 @@ function reject() {
                                 <div
                                     class="text-sm font-semibold text-slate-600 dark:text-slate-400"
                                 >
-                                    Nama Hotel
+                                    Nama Rumah Tumpangan
                                 </div>
                                 <div
                                     class="text-md text-slate-900 dark:text-slate-100"
@@ -711,7 +754,7 @@ function reject() {
                                 <div
                                     class="text-sm font-semibold text-slate-600 dark:text-slate-400"
                                 >
-                                    Operasi
+                                    Waktu Beroperasi
                                 </div>
                                 <div
                                     class="text-md text-slate-900 dark:text-slate-100"
@@ -775,87 +818,34 @@ function reject() {
                         <h3
                             class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4"
                         >
-                            Maklumat Iklan / Papan Tanda
+                            Jenis Lesen Yang Dipohon
                         </h3>
-                        <div class="space-y-3">
-                            <div
-                                v-for="(item, idx) in application.advertisement_infos || []"
-                                :key="`ad-${idx}`"
-                                class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"
-                            >
-                                <div
-                                    class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                >
-                                    Iklan #{{ idx + 1 }}
-                                </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
-                                    <div>
-                                        <div
-                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                        >
-                                            Jenis
-                                        </div>
-                                        <div
-                                            class="text-md text-slate-900 dark:text-slate-100"
-                                        >
-                                            {{ item.type || '-' }}
-                                        </div>
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                    <div
+                                        class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                    >
+                                        Jenis Lesen
                                     </div>
-                                    <div>
-                                        <div
-                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                        >
-                                            Struktur
-                                        </div>
-                                        <div
-                                            class="text-md text-slate-900 dark:text-slate-100"
-                                        >
-                                            {{ item.structure || '-' }}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div
-                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                        >
-                                            Panjang
-                                        </div>
-                                        <div
-                                            class="text-md text-slate-900 dark:text-slate-100"
-                                        >
-                                            {{ item.length || '-' }}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div
-                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                        >
-                                            Lebar
-                                        </div>
-                                        <div
-                                            class="text-md text-slate-900 dark:text-slate-100"
-                                        >
-                                            {{ item.width || '-' }}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div
-                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                        >
-                                            Bilangan
-                                        </div>
-                                        <div
-                                            class="text-md text-slate-900 dark:text-slate-100"
-                                        >
-                                            {{ item.number_of_ads || '-' }}
-                                        </div>
+                                    <div
+                                        class="text-md text-slate-900 dark:text-slate-100"
+                                    >
+                                        {{ formatLicenseType(application.license_type_selected || application.license_types?.[0]?.aktiviti) }}
                                     </div>
                                 </div>
-                            </div>
-                            <div
-                                v-if="!(application.advertisement_infos || []).length"
-                                class="text-sm text-slate-600 dark:text-slate-400"
-                            >
-                                Tiada maklumat iklan direkodkan.
+                                <div>
+                                    <div
+                                        class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                    >
+                                        Bilangan Bilik
+                                    </div>
+                                    <div
+                                        class="text-md text-slate-900 dark:text-slate-100"
+                                    >
+                                        {{ application.room_count || application.license_types?.[0]?.unit_bilik || '-' }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -864,63 +854,61 @@ function reject() {
                         <h3
                             class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4"
                         >
-                            Jenis Lesen Dipohon
+                            Maklumat Tambahan (Aktiviti)
                         </h3>
                         <div class="space-y-3">
                             <div
-                                v-for="(item, idx) in application.license_types || []"
-                                :key="`license-${idx}`"
+                                v-for="(item, idx) in application.additional_infos || []"
+                                :key="`ad-${idx}`"
                                 class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"
                             >
-                                <div
-                                    class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                >
-                                    Lesen #{{ idx + 1 }}
+                                <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">
+                                    #{{ idx + 1 }} {{ formatActivityType(item.activity_type) }} 
                                 </div>
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-2">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                                     <div>
                                         <div
                                             class="text-sm font-semibold text-slate-600 dark:text-slate-400"
                                         >
-                                            Aktiviti
+                                            Aktiviti Tambahan
                                         </div>
                                         <div
                                             class="text-md text-slate-900 dark:text-slate-100"
                                         >
-                                            {{ item.aktiviti || '-' }}
+                                            {{ formatActivityType(item.activity_type) }}
+                                        </div>
+                                    </div>
+                                    <div v-if="activityJenisLabel(item.activity_type)">
+                                        <div
+                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                        >
+                                            {{ activityJenisLabel(item.activity_type) }}
+                                        </div>
+                                        <div
+                                            class="text-md text-slate-900 dark:text-slate-100"
+                                        >
+                                            {{ item.jenis || '-' }}
                                         </div>
                                     </div>
                                     <div>
                                         <div
                                             class="text-sm font-semibold text-slate-600 dark:text-slate-400"
                                         >
-                                            Keluasan
+                                            Keluasan (MPS)
                                         </div>
                                         <div
                                             class="text-md text-slate-900 dark:text-slate-100"
                                         >
-                                            {{ item.keluasan || '-' }}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div
-                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                        >
-                                            Unit / Bilik
-                                        </div>
-                                        <div
-                                            class="text-md text-slate-900 dark:text-slate-100"
-                                        >
-                                            {{ item.unit_bilik || '-' }}
+                                            {{ item.keluasan_mps || '-' }}
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             <div
-                                v-if="!(application.license_types || []).length"
+                                v-if="!(application.additional_infos || []).length"
                                 class="text-sm text-slate-600 dark:text-slate-400"
                             >
-                                Tiada jenis lesen direkodkan.
+                                Tiada maklumat aktiviti tambahan direkodkan.
                             </div>
                         </div>
                     </section>

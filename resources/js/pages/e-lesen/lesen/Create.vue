@@ -110,6 +110,75 @@ const malaysiaStates = [
   'Wilayah Persekutuan Putrajaya',
 ]
 
+const additionalActivityConfigs = [
+  {
+    key: 'papan_iklan',
+    label: 'Papan Iklan',
+    hasJenis: true,
+    jenisLabel: 'Jenis',
+    jenisInputType: 'select',
+    jenisOptions: ['Bersinar', 'Tidak Bersinar'],
+  },
+  {
+    key: 'permit_sementara_papan_tanda',
+    label: 'Permit Sementara Papan Tanda',
+    hasJenis: false,
+    jenisLabel: 'Jenis',
+    jenisInputType: 'text',
+    jenisOptions: [],
+  },
+  {
+    key: 'billiard_snooker',
+    label: 'Billiard/Snooker',
+    hasJenis: true,
+    jenisLabel: 'Bilangan Meja',
+    jenisInputType: 'number',
+    jenisOptions: [],
+  },
+  {
+    key: 'karaoke',
+    label: 'Karaoke',
+    hasJenis: true,
+    jenisLabel: 'Jenis',
+    jenisInputType: 'select',
+    jenisOptions: ['Terbuka', 'Tertutup'],
+  },
+  {
+    key: 'gym',
+    label: 'Gym',
+    hasJenis: false,
+    jenisLabel: 'Jenis',
+    jenisInputType: 'text',
+    jenisOptions: [],
+  },
+  {
+    key: 'kedai_serbaneka',
+    label: 'Kedai Serbaneka',
+    hasJenis: false,
+    jenisLabel: 'Jenis',
+    jenisInputType: 'text',
+    jenisOptions: [],
+  },
+  {
+    key: 'pusat_penjagaan',
+    label: 'Pusat Penjagaan Kesihatan, Kecantikan, dan Seumpamanya',
+    hasJenis: false,
+    jenisLabel: 'Jenis',
+    jenisInputType: 'text',
+    jenisOptions: [],
+  },
+] as const
+
+type AdditionalActivityKey = (typeof additionalActivityConfigs)[number]['key']
+
+function hasJenisColumn(activityKey: AdditionalActivityKey) {
+  return additionalActivityConfigs.find((config) => config.key === activityKey)?.hasJenis ?? false
+}
+
+function getActivityConfig(activityKey: AdditionalActivityKey) {
+  return additionalActivityConfigs.find((config) => config.key === activityKey)
+}
+
 const districtMap: Record<string, string[]> = {
   Johor: ['Batu Pahat', 'Johor Bahru', 'Kluang', 'Kota Tinggi', 'Kulai', 'Mersing', 'Muar', 'Pontian', 'Segamat', 'Tangkak'],
   Kedah: ['Baling', 'Bandar Baharu', 'Kota Setar', 'Kuala Muda', 'Kubang Pasu', 'Kulim', 'Langkawi', 'Padang Terap', 'Pendang', 'Pokok Sena', 'Sik', 'Yan'],
@@ -186,9 +255,16 @@ const form = ref({
   },
   advertisment_info: {
     address: '',
-    dynamic_table_rows: [
-      { kod_hasil: '', jenis_perniagaan: '', aktiviti: '', amaun: '' },
-    ],
+    selected_activities: [] as AdditionalActivityKey[],
+    activity_tables: {
+      papan_iklan: [{ jenis: '', keluasan: '' }],
+      permit_sementara_papan_tanda: [{ jenis: '', keluasan: '' }],
+      billiard_snooker: [{ jenis: '', keluasan: '' }],
+      karaoke: [{ jenis: '', keluasan: '' }],
+      gym: [{ jenis: '', keluasan: '' }],
+      kedai_serbaneka: [{ jenis: '', keluasan: '' }],
+      pusat_penjagaan: [{ jenis: '', keluasan: '' }],
+    },
   },
   declaration: {
     agree: false,
@@ -723,25 +799,25 @@ function submitForm() {
     }))
     .filter((doc) => doc.file)
 
-  const { license_type_selected, room_count, ...companyInfo } = form.value.company_info
+  const companyInfo = form.value.company_info
 
-  const license_type = license_type_selected
-    ? [{ aktiviti: license_type_selected, keluasan: '', unit_bilik: room_count || '' }]
-    : []
+  const advertisementInfoPayload = form.value.advertisment_info.selected_activities
+    .flatMap((activityKey) => {
+      const rows = form.value.advertisment_info.activity_tables[activityKey] ?? []
+      const withJenis = hasJenisColumn(activityKey)
 
-  const advertisementInfoPayload = form.value.advertisment_info.dynamic_table_rows.map((row) => ({
-    type: row.kod_hasil,
-    structure: row.jenis_perniagaan,
-    length: row.aktiviti,
-    width: row.amaun,
-    number_of_ads: '',
-  }))
+      return rows.map((row) => ({
+        activity_type: activityKey,
+        jenis: withJenis ? row.jenis : '',
+        keluasan_mps: row.keluasan,
+      }))
+    })
+    .filter((row) => row.keluasan_mps || row.jenis)
 
   const payload = {
     pbt_name: form.value.pbt_name,
     applicant_info: form.value.applicant_info,
     company_info: companyInfo,
-    license_type,
     advertisement_info: advertisementInfoPayload,
     processing_fee: {
       amount: processingFeeAmountInCents,
@@ -782,13 +858,15 @@ function submitForm() {
   })
 }
 
-function addAdvertismentRow() {
-  form.value.advertisment_info.dynamic_table_rows.push({ kod_hasil: '', jenis_perniagaan: '', aktiviti: '', amaun: '' })
+function addActivityRow(activityKey: AdditionalActivityKey) {
+  form.value.advertisment_info.activity_tables[activityKey].push({ jenis: '', keluasan: '' })
 }
 
-function removeAdvertismentRow(index: number) {
-  if (form.value.advertisment_info.dynamic_table_rows.length > 1) {
-    form.value.advertisment_info.dynamic_table_rows.splice(index, 1)
+function removeActivityRow(activityKey: AdditionalActivityKey, index: number) {
+  const rows = form.value.advertisment_info.activity_tables[activityKey]
+
+  if (rows.length > 1) {
+    rows.splice(index, 1)
   }
 }
 
@@ -819,11 +897,11 @@ const selectedLicenseTypeLabel = computed(() => {
 //   'Tepi Jalan',
 // ]
 
-type CompanyCategoryInfo = {
-  title: string
-  description?: string
-  points?: string[]
-}
+// type CompanyCategoryInfo = {
+//   title: string
+//   description?: string
+//   points?: string[]
+// }
 
 // const companyCategoryDescriptions: Record<string, CompanyCategoryInfo> = {
 //   t1: {
@@ -1528,76 +1606,138 @@ function getPbtCardClass(index: number) {
           <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
 
           <div class="mt-4 space-y-6">
-            <div>
-              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Jenis Lesen Yang Dipohon</h2>
-              <select
-                v-model="form.company_info.license_type_selected"
-                class="w-full md:w-1/2 px-3 py-2 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
-              >
-                <option value="">-- Pilih Jenis Lesen --</option>
-                <option v-for="option in licenseTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-              </select>
-            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Jenis Lesen Yang Dipohon</h2>
+                <select
+                  v-model="form.company_info.license_type_selected"
+                  class="w-full px-3 py-2 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
+                >
+                  <option value="">-- Pilih Jenis Lesen --</option>
+                  <option v-for="option in licenseTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                </select>
+              </div>
 
-            <div>
-              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Bilangan Bilik</h2>
-              <input
-                v-model="form.company_info.room_count"
-                inputmode="numeric"
-                pattern="[0-9]*"
-                @input="form.company_info.room_count = enforceNumericValue($event)"
-                class="w-full md:w-1/2 px-3 py-2 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
-                placeholder="Masukkan bilangan bilik"
-              />
+              <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Bilangan Bilik</h2>
+                <input
+                  v-model="form.company_info.room_count"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  @input="form.company_info.room_count = enforceNumericValue($event)"
+                  class="w-full px-3 py-2 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
+                  placeholder="Masukkan bilangan bilik"
+                />
+              </div>
             </div>
 
             <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
 
-            <div class="overflow-auto">
-              <div class="flex justify-between items-center mb-2">
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Aktiviti Tambahan</h2>
-                <button type="button" @click="addAdvertismentRow"
-                  class="px-3 py-1 bg-green-600 text-white rounded-xl dark:bg-green-500">Tambah</button>
+            <div class="space-y-4">
+              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Aktiviti Tambahan</h2>
+
+              <div class="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+                <label
+                  v-for="activity in additionalActivityConfigs"
+                  :key="activity.key"
+                  class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                >
+                  <input
+                    v-model="form.advertisment_info.selected_activities"
+                    type="checkbox"
+                    :value="activity.key"
+                    class="h-4 w-4"
+                  />
+                  <span>{{ activity.label }}</span>
+                </label>
               </div>
-              <table class="w-full table-auto border-collapse text-slate-900 dark:text-slate-100">
-                <thead>
-                  <tr class="bg-gray-100 dark:bg-slate-800">
-                    <th class="border px-2 py-1 text-center">No</th>
-                    <th class="border px-2 py-1 text-left">Kod Hasil</th>
-                    <th class="border px-2 py-1 text-left">Jenis Perniagaan</th>
-                    <th class="border px-2 py-1 text-left">Aktiviti</th>
-                    <th class="border px-2 py-1 text-left">Amaun (RM)</th>
-                    <th class="border px-2 py-1 text-center">Tindakan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, rIndex) in form.advertisment_info.dynamic_table_rows" :key="rIndex">
-                    <td class="border px-2 py-1 text-center">{{ rIndex + 1 }}</td>
-                    <td class="border px-2 py-1">
-                      <input v-model="row.kod_hasil"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                    </td>
-                    <td class="border px-2 py-1">
-                      <input v-model="row.jenis_perniagaan"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                    </td>
-                    <td class="border px-2 py-1">
-                      <input v-model="row.aktiviti"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                    </td>
-                    <td class="border px-2 py-1">
-                      <input v-model="row.amaun" inputmode="numeric" pattern="[0-9]*"
-                        @input="row.amaun = enforceNumericValue($event)"
-                        class="w-full px-2 py-1 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700" />
-                    </td>
-                    <td class="border px-2 py-1 text-center">
-                      <button type="button" @click="removeAdvertismentRow(rIndex)"
-                        class="px-2 py-1 bg-red-600 text-white rounded-xl dark:bg-red-500"
-                        :disabled="form.advertisment_info.dynamic_table_rows.length <= 1">Buang</button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+
+              <div
+                v-for="activity in additionalActivityConfigs.filter((item) => form.advertisment_info.selected_activities.includes(item.key))"
+                :key="`table-${activity.key}`"
+                class="overflow-auto rounded-xl border border-slate-200 dark:border-slate-700"
+              >
+                <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
+                  <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ activity.label }}</h3>
+                  <button
+                    type="button"
+                    @click="addActivityRow(activity.key)"
+                    class="rounded-xl bg-green-600 px-3 py-1 text-sm text-white dark:bg-green-500"
+                  >
+                    Tambah
+                  </button>
+                </div>
+
+                <table class="w-full table-auto border-collapse text-slate-900 dark:text-slate-100">
+                  <thead>
+                    <tr class="bg-gray-100 dark:bg-slate-800">
+                      <th class="border px-2 py-1 text-center">No</th>
+                      <th v-if="activity.hasJenis" class="border px-2 py-1 text-left">{{ activity.jenisLabel }}</th>
+                      <th class="border px-2 py-1 text-left">Keluasan (MPS)</th>
+                      <th class="border px-2 py-1 text-center">Tindakan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="(row, rIndex) in form.advertisment_info.activity_tables[activity.key]"
+                      :key="`${activity.key}-row-${rIndex}`"
+                    >
+                      <td class="border px-2 py-1 text-center">{{ rIndex + 1 }}</td>
+                      <td v-if="activity.hasJenis" class="border px-2 py-1">
+                        <select
+                          v-if="activity.jenisInputType === 'select'"
+                          v-model="row.jenis"
+                          class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        >
+                          <option value="">-- Pilih --</option>
+                          <option
+                            v-for="option in activity.jenisOptions"
+                            :key="`${activity.key}-jenis-${option}`"
+                            :value="option"
+                          >
+                            {{ option }}
+                          </option>
+                        </select>
+                        <input
+                          v-else-if="activity.jenisInputType === 'number'"
+                          v-model="row.jenis"
+                          inputmode="numeric"
+                          pattern="[0-9]*"
+                          @input="row.jenis = enforceNumericValue($event)"
+                          class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          placeholder="Masukkan bilangan meja"
+                        />
+                        <input
+                          v-else
+                          v-model="row.jenis"
+                          class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          placeholder="Masukkan jenis"
+                        />
+                      </td>
+                      <td class="border px-2 py-1">
+                        <input
+                          v-model="row.keluasan"
+                          inputmode="numeric"
+                          pattern="[0-9]*"
+                          @input="row.keluasan = enforceNumericValue($event)"
+                          class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          placeholder="Masukkan keluasan"
+                        />
+                      </td>
+                      <td class="border px-2 py-1 text-center">
+                        <button
+                          type="button"
+                          @click="removeActivityRow(activity.key, rIndex)"
+                          class="rounded-xl bg-red-600 px-2 py-1 text-white dark:bg-red-500"
+                          :disabled="form.advertisment_info.activity_tables[activity.key].length <= 1"
+                        >
+                          Buang
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
           <hr class="my-6 border-t border-gray-200 dark:border-slate-700" />
@@ -2023,25 +2163,32 @@ function getPbtCardClass(index: number) {
 
               <section>
                 <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{{ stepTitles[3] }}</h3>
-                <div class="space-y-3">
-                  <div v-for="(row, idx) in form.advertisment_info.dynamic_table_rows" :key="`summary-ads-${idx}`" class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-                    <div class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">Iklan #{{ idx + 1 }}</div>
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div v-if="form.advertisment_info.selected_activities.length === 0" class="text-sm text-slate-600 dark:text-slate-300">
+                  Tiada aktiviti tambahan dipilih.
+                </div>
+                <div v-else class="space-y-3">
+                  <div
+                    v-for="activity in additionalActivityConfigs.filter((item) => form.advertisment_info.selected_activities.includes(item.key))"
+                    :key="`summary-${activity.key}`"
+                    class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"
+                  >
+                    <div class="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-400">{{ activity.label }}</div>
+                    <div
+                      v-for="(row, idx) in form.advertisment_info.activity_tables[activity.key]"
+                      :key="`summary-${activity.key}-${idx}`"
+                      class="grid grid-cols-1 gap-3 border-t border-slate-200 py-2 first:border-t-0 dark:border-slate-700 md:grid-cols-3"
+                    >
                       <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Kod Hasil</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.kod_hasil || '-' }}</div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">No</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ idx + 1 }}</div>
+                      </div>
+                      <div v-if="activity.hasJenis">
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">{{ getActivityConfig(activity.key)?.jenisLabel ?? 'Jenis' }}</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.jenis || '-' }}</div>
                       </div>
                       <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Jenis Perniagaan</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.jenis_perniagaan || '-' }}</div>
-                      </div>
-                      <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Aktiviti</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.aktiviti || '-' }}</div>
-                      </div>
-                      <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Amaun</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.amaun || '-' }}</div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Keluasan (MPS)</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.keluasan || '-' }}</div>
                       </div>
                     </div>
                   </div>

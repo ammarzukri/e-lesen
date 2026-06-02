@@ -16,6 +16,8 @@ type LicenseApplication = {
 	payment_amount?: number
 	created_at?: string
 	updated_at?: string
+	license_type_selected?: string
+	room_count?: string
 	license_types?: LicenseType[]
 	hotel?: HotelInfo
 }
@@ -72,6 +74,11 @@ const isStaff = computed(() => page.props.auth?.user?.role === 'staff')
 const showPaymentSuccessOnce = computed(() => paymentFlash.value?.status === 'success')
 
 function getActivityList(application: LicenseApplication): string[] {
+	const directType = application.license_type_selected?.trim()
+	if (directType) {
+		return [directType]
+	}
+
 	return (application.license_types ?? [])
 		.map((item) => item.aktiviti)
 		.filter((value): value is string => Boolean(value && value.trim()))

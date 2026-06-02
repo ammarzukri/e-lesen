@@ -112,9 +112,11 @@ Route::get('dashboard', function () {
                     'expiry_date' => optional($a->hotel?->license?->expiry_date)->toDateString(),
                     'license_status' => $a->hotel?->license?->status,
                     'license_number' => $a->hotel?->license?->license_number,
-                    'types' => $a->licenseTypes->map(function ($t) {
-                        return $t->aktiviti;
-                    })->values(),
+                    'types' => $a->license_type_selected
+                        ? collect([$a->license_type_selected])
+                        : $a->licenseTypes->map(function ($t) {
+                            return $t->aktiviti;
+                        })->values(),
                 ];
             })->values();
 
@@ -159,9 +161,11 @@ Route::get('dashboard', function () {
                 'expiry_date' => optional($a->hotel?->license?->expiry_date)->toDateString(),
                 'license_status' => $a->hotel?->license?->status,
                 'license_number' => $a->hotel?->license?->license_number,
-                'types' => $a->licenseTypes->map(function ($t) {
-                    return $t->aktiviti;
-                })->values(),
+                'types' => $a->license_type_selected
+                    ? collect([$a->license_type_selected])
+                    : $a->licenseTypes->map(function ($t) {
+                        return $t->aktiviti;
+                    })->values(),
             ];
         })->values();
 

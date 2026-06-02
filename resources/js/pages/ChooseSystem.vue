@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { useAppearance } from '@/composables/useAppearance';
 
 const props = withDefaults(
     defineProps<{
@@ -35,6 +36,11 @@ function logout() {
 }
 
 const page = usePage();
+const { resolvedAppearance, updateAppearance } = useAppearance();
+
+function toggleAppearance() {
+    updateAppearance(resolvedAppearance.value === 'dark' ? 'light' : 'dark');
+}
 
 const fiSejahteraHref = computed(() =>
     ['admin', 'bkt_admin', 'pbt_admin', 'bendahara_admin'].includes(page.props.auth?.user?.role ?? '')
@@ -65,6 +71,15 @@ const fiSejahteraNotice = computed(() => {
         >
             <nav class="flex items-center justify-end gap-4">
                 <button
+                    type="button"
+                    @click="toggleAppearance"
+                    :title="resolvedAppearance === 'dark' ? 'Tukar ke mod cerah' : 'Tukar ke mod gelap'"
+                    :aria-label="resolvedAppearance === 'dark' ? 'Tukar ke mod cerah' : 'Tukar ke mod gelap'"
+                    class="inline-flex items-center gap-2 rounded-sm border border-gray-300 bg-white px-3 py-2 text-base leading-normal text-gray-800 transition-all duration-150 ease-out hover:scale-105 hover:border-gray-400 dark:bg-[#161615] dark:text-[#EDEDEC]"
+                >
+                    <span>{{ resolvedAppearance === 'dark' ? '☀' : '🌙' }}</span>
+                </button>
+                <button
                 @click="logout"
                 class="inline-block rounded-sm border border-gray-300 bg-white px-6 py-2 text-base leading-normal text-gray-800 transition-all duration-150 ease-out dark:bg-[#161615] dark:text-[#EDEDEC] hover:scale-105 hover:border-gray-400"
             >
@@ -81,8 +96,8 @@ const fiSejahteraNotice = computed(() => {
                         class="w-30 h-30 object-contain mb-3 inline-block" />
                 </div>
                 
-                <h1 class="text-5xl font-extrabold text-center text-white drop-shadow-lg mb-7">
-                    Sistem Fi Sejahtera
+                <h1 class="text-5xl font-extrabold text-center text-white drop-shadow-lg mb-7 dark:text-[#161615]">
+                    Sistem Pengurusan Fi Sejahtera (SPS)
                 </h1>
 
                 <div
@@ -108,7 +123,7 @@ const fiSejahteraNotice = computed(() => {
                             class="w-36 h-36 object-contain mb-6 dark:brightness-0 dark:invert" />
 
                         <h2 class="text-2xl font-bold text-gray-800 dark:text-[#EDEDEC] text-center px-4">
-                            Caj Fi Sejahtera
+                            Kutipan Fi Sejahtera
                         </h2>
                     </Link>
 
@@ -138,9 +153,9 @@ const fiSejahteraNotice = computed(() => {
                         <img src="/images/license.png" 
                             alt="Logo 2" 
                             class="w-36 h-36 object-contain mb-6 dark:brightness-0 dark:invert" />
-
+                    
                         <h2 class="text-xl text-center font-bold text-gray-800 dark:text-[#EDEDEC]">
-                            E-Lesen <br /> Rumah Tumpangan
+                            e-Lesen <br /> Rumah Tumpangan
                         </h2>
                     </Link>
                 </div>
@@ -148,9 +163,9 @@ const fiSejahteraNotice = computed(() => {
         </div>
         <div class="hidden lg:block"></div>
 
-        <div class="flex items-center justify-center gap-4">
-            <h1 class="text-sm font-extrabold text-gray-200 drop-shadow-lg">
-                Sistem Fi Sejahtera © 2026 Hak Cipta Terpelihara Kerajaan Negeri Terengganu. Powered by TAJDID Corporation Sdn. Bhd.
+        <div class="mt-4 flex items-center justify-center gap-4 lg:mt-6">
+            <h1 class="text-sm font-extrabold text-gray-200 drop-shadow-lg dark:text-[#161615]">
+                Sistem Pengurusan Fi Sejahtera (SPS) © 2026 Hak Cipta Terpelihara Kerajaan Negeri Terengganu. Powered by TAJDID Corporation Sdn. Bhd.
             </h1>
         </div>
     </div>
