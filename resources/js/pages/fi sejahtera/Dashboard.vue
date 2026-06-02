@@ -66,11 +66,11 @@ const filteredHotels = computed<HotelOption[]>(() => {
 
 const selectedHotelLabel = computed(() => {
     if (!selectedHotelId.value) {
-        return 'Semua Hotel';
+        return 'Semua Rumah Tumpangan';
     }
 
     const selected = hotels.value.find((hotel) => String(hotel.id) === selectedHotelId.value);
-    return selected?.name ?? 'Semua Hotel';
+    return selected?.name ?? 'Semua Rumah Tumpangan';
 });
 
 const topCountryTotal = computed(() => {
@@ -212,7 +212,7 @@ function formatCurrency(value: number) {
 </script>
 
 <template>
-    <Head title="Fi Sejahtera" />
+    <Head title="Dashboard" />
 
     <div class="flex min-h-screen bg-muted/30">
         <FiSejahteraSidebar />
@@ -232,7 +232,7 @@ function formatCurrency(value: number) {
                     </div>
 
                     <div v-if="canSelectHotel" class="w-full md:w-auto md:min-w-72">
-                        <label class="mb-1 block text-sm font-medium text-foreground">Pilih Hotel</label>
+                        <label class="mb-1 block text-sm font-medium text-foreground">Pilih Rumah Tumpangan</label>
                         <div class="flex flex-col gap-2 sm:flex-row">
                             <div ref="hotelDropdownRef" class="relative w-full">
                                 <button
@@ -250,7 +250,7 @@ function formatCurrency(value: number) {
                                     <input
                                         v-model="hotelSearch"
                                         type="text"
-                                        placeholder="Cari nama hotel..."
+                                        placeholder="Cari nama rumah tumpangan..."
                                         class="mb-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                     />
                                     <div class="max-h-56 overflow-auto">
@@ -259,7 +259,7 @@ function formatCurrency(value: number) {
                                             class="w-full rounded px-2 py-2 text-left text-sm hover:bg-muted"
                                             @click="chooseHotel()"
                                         >
-                                            Semua Hotel
+                                            Semua Rumah Tumpangan
                                         </button>
                                         <button
                                             v-for="hotel in filteredHotels"
@@ -272,7 +272,7 @@ function formatCurrency(value: number) {
                                             {{ hotel.name }} <span v-if="hotel.is_expired">⚠</span>
                                         </button>
                                         <p v-if="filteredHotels.length === 0" class="px-2 py-2 text-sm text-muted-foreground">
-                                            Tiada hotel dijumpai.
+                                            Tiada rumah tumpangan dijumpai.
                                         </p>
                                     </div>
                                 </div>

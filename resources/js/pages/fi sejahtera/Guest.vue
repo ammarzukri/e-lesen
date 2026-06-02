@@ -164,7 +164,7 @@ function formatCreatedAt(value?: string) {
 </script>
 
 <template>
-    <Head title="Senarai Tetamu" />
+    <Head title="Rekod Tetamu" />
 
     <div class="flex min-h-screen bg-muted/30">
         <FiSejahteraSidebar />
@@ -174,13 +174,13 @@ function formatCreatedAt(value?: string) {
 
             <main class="flex-1 space-y-6 p-6">
                 <div>
-                    <h1 class="text-2xl font-bold text-foreground">Senarai Tetamu</h1>
-                    <p class="text-sm text-muted-foreground">Paparan tetamu berdasarkan hotel dan carian.</p>
+                    <h1 class="text-2xl font-bold text-foreground">Rekod Tetamu</h1>
+                    <p class="text-sm text-muted-foreground">Paparan tetamu berdasarkan rumah tumpangan dan carian.</p>
                 </div>
 
                 <Card v-if="!hasHotel">
                     <CardContent class="pt-6 text-sm text-muted-foreground">
-                        Hotel tidak ditemui untuk akaun ini. Lengkapkan data hotel terlebih dahulu di modul E-Lesen.
+                        Rumah tumpangan tidak ditemui untuk akaun ini. Lengkapkan data rumah tumpangan terlebih dahulu di modul E-Lesen.
                     </CardContent>
                 </Card>
 
@@ -201,13 +201,13 @@ function formatCreatedAt(value?: string) {
                             </div>
 
                             <div v-if="canSelectHotel">
-                                <Label for="hotel_filter" class="mb-1">Hotel</Label>
+                                <Label for="hotel_filter" class="mb-1">Rumah Tumpangan</Label>
                                 <select
                                     id="hotel_filter"
                                     v-model="selectedHotelId"
                                     class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                 >
-                                    <option value="">Semua Hotel</option>
+                                    <option value="">Semua Rumah Tumpangan</option>
                                     <option
                                         v-for="hotel in hotels"
                                         :key="hotel.id"
@@ -280,7 +280,7 @@ function formatCreatedAt(value?: string) {
                                         <th class="p-2">No Identiti (IC/Passport)</th>
                                         <th class="p-2">Emel</th>
                                         <th class="p-2">No Telefon</th>
-                                        <th class="p-2">Hotel</th>
+                                        <th class="p-2">Rumah Tumpangan</th>
                                         <th class="p-2">Kuantiti Bilik</th>
                                         <th class="p-2">Jumlah Malam</th>
                                         <th class="p-2">Jumlah (RM)</th>
@@ -288,7 +288,12 @@ function formatCreatedAt(value?: string) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="(guest, index) in guests" :key="guest.id" class="border-t">
+                                    <tr
+                                        v-for="(guest, index) in guests"
+                                        :key="guest.id"
+                                        class="border-t"
+                                        :class="index % 2 === 0 ? 'bg-background' : 'bg-muted'"
+                                    >
                                         <td class="p-2">{{ Number(index) + 1 }}</td>
                                         <td class="p-2">{{ guest.name || '-' }}</td>
                                         <td class="p-2">{{ guest.identity_number || '-' }}</td>

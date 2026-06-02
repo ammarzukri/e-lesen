@@ -235,7 +235,7 @@ function resetFilter() {
 </script>
 
 <template>
-	<Head title="Senarai Pembayaran" />
+	<Head title="Rekod Pembayaran" />
 
 	<div class="flex min-h-screen bg-muted/30">
 		<FiSejahteraSidebar />
@@ -249,7 +249,7 @@ function resetFilter() {
 					
 					<!-- Title -->
 					<div>
-						<h1 class="text-2xl font-bold text-foreground">Senarai Pembayaran</h1>
+						<h1 class="text-2xl font-bold text-foreground">Rekod Pembayaran</h1>
 						<p class="text-sm text-muted-foreground">
 							Status penghantaran bukti pembayaran dan laporan tetamu.
 						</p>
@@ -258,7 +258,7 @@ function resetFilter() {
 					<!-- Filter -->
 					<div v-if="isAdmin" class="w-full sm:w-72">
 						<label for="hotel_name_filter" class="mb-1 block text-sm font-medium text-foreground">
-							Filter nama hotel
+							Tapis Rumah Tumpangan
 						</label>
 
 						<div class="flex gap-2">
@@ -267,7 +267,7 @@ function resetFilter() {
 								v-model="hotelNameFilter"
 								class="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
 							>
-								<option value="">Semua hotel</option>
+								<option value="">Semua Rumah Tumpangan</option>
 								<option v-for="hotelName in hotelNameOptions" :key="hotelName" :value="hotelName">
 									{{ hotelName }}
 								</option>
@@ -301,7 +301,7 @@ function resetFilter() {
 
 				<Card>
 					<CardHeader>
-						<CardTitle>Rekod Penghantaran Cukai</CardTitle>
+						<CardTitle>Rekod Pembayaran</CardTitle>
 					</CardHeader>
 					<CardContent>
 						<div class="overflow-x-auto">
@@ -314,7 +314,7 @@ function resetFilter() {
 										<th class="p-2">Jumlah (RM)</th>
 										<th class="p-2">Bukti Bayaran</th>
 										<th class="p-2">Senarai Tetamu</th>
-										<th class="p-2">Senarai Tetamu (Sistem Hotel)</th>
+										<th class="p-2">Senarai Tetamu (Sistem Rumah Tumpangan)</th>
 										<th class="p-2">Tarikh Hantar</th>
 										<th class="p-2">Status</th>
 										<th class="p-2">Pengesahan</th>

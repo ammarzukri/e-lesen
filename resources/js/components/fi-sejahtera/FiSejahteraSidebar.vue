@@ -10,20 +10,21 @@ const navigationItems = isAdminRole
     ? [
         { label: 'Dashboard', href: '/fi-sejahtera/dashboard', icon: LayoutGrid },
         // { label: 'Senarai Tetamu', href: '/fi-sejahtera/guest', icon: Users },
-        { label: 'Senarai Pembayaran', href: '/fi-sejahtera/tax', icon: DollarSign },
+        { label: 'Rekod Pembayaran', href: '/fi-sejahtera/tax', icon: DollarSign },
     ]
     : [
         { label: 'Dashboard', href: '/fi-sejahtera/dashboard', icon: LayoutGrid },
-        { label: 'Fi Sejahtera', href: '/fi-sejahtera/apply', icon: Banknote },
-        { label: 'Senarai Tetamu', href: '/fi-sejahtera/guest', icon: Users },
-        { label: 'Senarai Pembayaran', href: '/fi-sejahtera/tax', icon: DollarSign },
+        { label: 'Kutipan Fi Sejahtera', href: '/fi-sejahtera/apply', icon: Banknote },
+        { label: 'Rekod Tetamu', href: '/fi-sejahtera/guest', icon: Users },
+        // { label: 'Senarai Pembayaran', href: '/fi-sejahtera/tax', icon: DollarSign },
     ];
 
 if (role === 'user') {
     navigationItems.push(
-        { label: 'Urus Staf', href: '/fi-sejahtera/staff', icon: Users },
-        { label: 'Pembayaran ke Perbendaharaan', href: '/fi-sejahtera/perbendaharaan', icon: HandCoins },
-        { label: 'Hantar Bukti Pembayaran', href: '/fi-sejahtera/payment', icon: WalletCards });
+        { label: 'Laporan Pembayaran Fi', href: '/fi-sejahtera/perbendaharaan', icon: HandCoins },
+        { label: 'Rekod Bukti Pembayaran Fi', href: '/fi-sejahtera/payment', icon: WalletCards },
+        { label: 'Tetapan Staff', href: '/fi-sejahtera/staff', icon: Users }
+    );
 }
 
 const isActive = (href: string) => page.url.startsWith(href);

@@ -65,7 +65,7 @@ const displayHotelName = computed(() => {
     return hotelName && hotelName.length > 0 ? hotelName : 'Hotel';
 });
 const pageTitle = computed(() =>
-    isUserRole.value ? 'Sistem Fi Sejahtera' : `Sistem Fi Sejahtera ${displayHotelName.value}`,
+    isUserRole.value ? 'Kutipan Fi Sejahtera' : `Kutipan Fi Sejahtera ${displayHotelName.value}`,
 );
 
 const isSubmitting = ref(false);
@@ -222,7 +222,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <Head title="Fi Sejahtera" />
+    <Head title="Kutipan Fi Sejahtera" />
 
     <div class="flex min-h-screen bg-muted/30">
         <FiSejahteraSidebar />
@@ -259,7 +259,7 @@ onMounted(async () => {
                         </div>
 
                         <section class="space-y-4">
-                            <h2 class="text-base font-semibold text-foreground">Bahagian 1: Maklumat Peribadi</h2>
+                            <h2 class="text-base font-semibold text-foreground">Bahagian 1: Maklumat Tetamu</h2>
 
                             <div class="grid gap-4 md:grid-cols-2">
                                 <div class="space-y-2 md:col-span-2">
@@ -372,7 +372,7 @@ onMounted(async () => {
 
                             <div class="grid gap-4 md:grid-cols-2">
                                 <div class="space-y-2 md:col-span-2">
-                                    <label class="text-sm font-medium text-foreground">Nama Hotel</label>
+                                    <label class="text-sm font-medium text-foreground">Nama Rumah Tumpangan</label>
                                     <select
                                         v-if="isUserRole"
                                         v-model="form.hotel_name"

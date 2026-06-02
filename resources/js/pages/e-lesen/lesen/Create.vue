@@ -808,16 +808,16 @@ const selectedLicenseTypeLabel = computed(() => {
   return selected?.label ?? ''
 })
 
-const advertismentOptions1 = [
-  'Bersinar',
-  'Tidak Bersinar',
-]
+// const advertismentOptions1 = [
+//   'Bersinar',
+//   'Tidak Bersinar',
+// ]
 
-const advertismentOptions2 = [
-  'Pada Bangunan',
-  'Menganjur',
-  'Tepi Jalan',
-]
+// const advertismentOptions2 = [
+//   'Pada Bangunan',
+//   'Menganjur',
+//   'Tepi Jalan',
+// ]
 
 type CompanyCategoryInfo = {
   title: string
@@ -825,95 +825,95 @@ type CompanyCategoryInfo = {
   points?: string[]
 }
 
-const companyCategoryDescriptions: Record<string, CompanyCategoryInfo> = {
-  t1: {
-    title: 'Kategori T-1',
-    description: 'Mempunyai kesemua atau sekurang-kurangnya sembilan (9) kemudahan:',
-    points: [
-      'Bar',
-      'Lounge',
-      'Dewan / Banquet / Bilik Mesyuarat',
-      'Aktiviti Pementasan / Persembahan Hiburan',
-      'Restoran / Coffee House / Kafe',
-      'Kolam Renang (Kanak-Kanak dan Dewasa)',
-      'Tempat Letak Kenderaan',
-      'Perkhidmatan Dobi',
-      'Kelab Kesihatan / Gimnasium / Sauna / Kemudahan Rekreasi dan Riadah',
-      'Salun Kecantikan',
-      'Kedai / Kiosk / Pasaraya',
-      'Papan Iklan',
-      'Kelab Golf',
-      'Taman Tema',
-      'Pusat Beli Belah'
-    ],
-  },
-  t2: {
-    title: 'Kategori T-2',
-    description: 'Mempunyai kesemua atau sekurang-kurangnya lapan (8) kemudahan:',
-    points: [
-      'Bar',
-      'Lounge',
-      'Dewan / Banquet / Bilik Mesyuarat',
-      'Aktiviti Pementasan / Persembahan Hiburan',
-      'Restoran / Coffee House / Kafe',
-      'Kolam Renang (Kanak-Kanak dan Dewasa)',
-      'Tempat Letak Kenderaan',
-      'Perkhidmatan Dobi',
-      'Kelab Kesihatan / Gimnasium / Sauna / Kemudahan Rekreasi dan Riadah',
-      'Salun Kecantikan',
-      'Kedai / Kiosk',
-      'Papan Iklan',
-      'Kelab Golf / Padang Golf',
-      'Taman Tema',
-    ],
-  },
-  t3: {
-    title: 'Kategori T-3',
-    description: 'Mempunyai kesemua atau sekurang-kurangnya enam (6) kemudahan:',
-    points: [
-      'Bar',
-      'Lounge',
-      'Dewan / Banquet / Bilik Mesyuarat / Dewan Terbuka / Dewan Makan',
-      'Aktiviti Pementasan / Persembahan Hiburan',
-      'Restoran / Coffee House / Kafe',
-      'Kolam Renang',
-      'Tempat Letak Kenderaan',
-      'Perkhidmatan Dobi',
-      'Tandas Awam',
-      'Lobi / Kaunter Pendaftaran',
-      'Kedai / Kiosk',
-      'Papan Iklan',
-    ],
-  },
-  t4: {
-    title: 'Kategori T-4',
-    description: 'Mempunyai kesemua atau sekurang-kurangnya satu (1) kemudahan:',
-    points: [
-      'Tempat Letak Kenderaan',
-      'Perkhidmatan Dobi',
-      'Kedai / Kiosk',
-      'Papan Iklan',
-      'Tandas Awam',
-      'Lobi / Kaunter Pendaftaran',
-      'Dewan / Banquet / Bilik Mesyuarat / Dewan Terbuka / Dewan Makan',
-      'Kolam Renang',
-    ],
-  },
-  t5: {
-    title: 'Kategori T-5',
-    points: [
-      'Asrama',
-      'Motel', 
-      'Rumah Tumpangan', 
-      'Rumah Permalaman', 
-      'Rumah Tetamu', 
-      'Rumah Bot', 
-      'Homestay', 
-      'Townstay', 
-      'Kampungstay', 
-      'Tapak Perkhemahan atau Kenderaan atau mana-mana Rumah Tumpangan yang digunakan sebagai tempat menginap yang berbayar.'],
-  },
-}
+// const companyCategoryDescriptions: Record<string, CompanyCategoryInfo> = {
+//   t1: {
+//     title: 'Kategori T-1',
+//     description: 'Mempunyai kesemua atau sekurang-kurangnya sembilan (9) kemudahan:',
+//     points: [
+//       'Bar',
+//       'Lounge',
+//       'Dewan / Banquet / Bilik Mesyuarat',
+//       'Aktiviti Pementasan / Persembahan Hiburan',
+//       'Restoran / Coffee House / Kafe',
+//       'Kolam Renang (Kanak-Kanak dan Dewasa)',
+//       'Tempat Letak Kenderaan',
+//       'Perkhidmatan Dobi',
+//       'Kelab Kesihatan / Gimnasium / Sauna / Kemudahan Rekreasi dan Riadah',
+//       'Salun Kecantikan',
+//       'Kedai / Kiosk / Pasaraya',
+//       'Papan Iklan',
+//       'Kelab Golf',
+//       'Taman Tema',
+//       'Pusat Beli Belah'
+//     ],
+//   },
+//   t2: {
+//     title: 'Kategori T-2',
+//     description: 'Mempunyai kesemua atau sekurang-kurangnya lapan (8) kemudahan:',
+//     points: [
+//       'Bar',
+//       'Lounge',
+//       'Dewan / Banquet / Bilik Mesyuarat',
+//       'Aktiviti Pementasan / Persembahan Hiburan',
+//       'Restoran / Coffee House / Kafe',
+//       'Kolam Renang (Kanak-Kanak dan Dewasa)',
+//       'Tempat Letak Kenderaan',
+//       'Perkhidmatan Dobi',
+//       'Kelab Kesihatan / Gimnasium / Sauna / Kemudahan Rekreasi dan Riadah',
+//       'Salun Kecantikan',
+//       'Kedai / Kiosk',
+//       'Papan Iklan',
+//       'Kelab Golf / Padang Golf',
+//       'Taman Tema',
+//     ],
+//   },
+//   t3: {
+//     title: 'Kategori T-3',
+//     description: 'Mempunyai kesemua atau sekurang-kurangnya enam (6) kemudahan:',
+//     points: [
+//       'Bar',
+//       'Lounge',
+//       'Dewan / Banquet / Bilik Mesyuarat / Dewan Terbuka / Dewan Makan',
+//       'Aktiviti Pementasan / Persembahan Hiburan',
+//       'Restoran / Coffee House / Kafe',
+//       'Kolam Renang',
+//       'Tempat Letak Kenderaan',
+//       'Perkhidmatan Dobi',
+//       'Tandas Awam',
+//       'Lobi / Kaunter Pendaftaran',
+//       'Kedai / Kiosk',
+//       'Papan Iklan',
+//     ],
+//   },
+//   t4: {
+//     title: 'Kategori T-4',
+//     description: 'Mempunyai kesemua atau sekurang-kurangnya satu (1) kemudahan:',
+//     points: [
+//       'Tempat Letak Kenderaan',
+//       'Perkhidmatan Dobi',
+//       'Kedai / Kiosk',
+//       'Papan Iklan',
+//       'Tandas Awam',
+//       'Lobi / Kaunter Pendaftaran',
+//       'Dewan / Banquet / Bilik Mesyuarat / Dewan Terbuka / Dewan Makan',
+//       'Kolam Renang',
+//     ],
+//   },
+//   t5: {
+//     title: 'Kategori T-5',
+//     points: [
+//       'Asrama',
+//       'Motel', 
+//       'Rumah Tumpangan', 
+//       'Rumah Permalaman', 
+//       'Rumah Tetamu', 
+//       'Rumah Bot', 
+//       'Homestay', 
+//       'Townstay', 
+//       'Kampungstay', 
+//       'Tapak Perkhemahan atau Kenderaan atau mana-mana Rumah Tumpangan yang digunakan sebagai tempat menginap yang berbayar.'],
+//   },
+// }
 
 // const selectedCompanyCategoryInformation = computed(() => {
 //   const selectedCategory = form.value.company_info.company_category
@@ -1771,7 +1771,7 @@ function getPbtCardClass(index: number) {
               <div class="text-sm text-slate-600 dark:text-slate-300">Jumlah perlu dibayar</div>
               <div class="text-3xl font-bold text-slate-900 dark:text-slate-100">RM{{ formattedProcessingFeeAmount }}</div>
               <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Permohonan hanya boleh dihantar selepas fi proses disahkan sebagai telah dibayar.
+                Permohonan hanya boleh dihantar selepas Bayaran Fi Proses telah dibayar.
               </div>
             </div>
 
@@ -1803,7 +1803,7 @@ function getPbtCardClass(index: number) {
                 Bayaran sedang diproses. Status akan dikemas kini secara automatik selepas pembayaran berjaya.
               </template>
               <template v-else>
-                Bayaran belum dibuat. Sila buat pembayaran ToyyibPay untuk teruskan penghantaran.
+                Bayaran belum dibuat. Sila buat Bayaran Fi Proses untuk teruskan penghantaran.
               </template>
             </div>
 

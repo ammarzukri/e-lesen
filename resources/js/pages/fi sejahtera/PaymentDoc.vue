@@ -220,7 +220,7 @@ function submitToBkt(submissionId: number) {
 </script>
 
 <template>
-    <Head title="Payment Document" />
+    <Head title="Rekod Bukti Pembayaran Fi" />
 
     <div class="flex min-h-screen bg-muted/30">
         <FiSejahteraSidebar />
@@ -230,9 +230,9 @@ function submitToBkt(submissionId: number) {
 
             <main class="flex-1 space-y-6 p-6">
                 <div>
-                    <h1 class="text-2xl font-bold text-foreground">Hantar Bukti Pembayaran</h1>
+                    <h1 class="text-2xl font-bold text-foreground">Rekod Bukti Pembayaran Fi</h1>
                     <p class="text-sm text-muted-foreground">
-                        Ikuti aliran baharu: semak status laporan PBT, muat naik senarai sistem hotel, bayar, kemudian hantar ke BKT.
+                        Senarai rekod bukti pembayaran Fi.
                     </p>
                 </div>
 
@@ -260,19 +260,24 @@ function submitToBkt(submissionId: number) {
                                 <thead>
                                     <tr class="text-sm text-muted-foreground">
                                         <th class="p-2">Bil.</th>
-                                        <th class="p-2">Hotel</th>
+                                        <th class="p-2">Rumah Tumpangan</th>
                                         <th class="p-2">Bulan/Tahun</th>
                                         <th class="p-2">Status Bayaran</th>
                                         <th class="p-2">Jumlah (RM)</th>
                                         <th class="p-2">Resit</th>
                                         <th class="p-2">Senarai Tetamu</th>
-                                        <th class="p-2">Senarai Tetamu (Sistem Hotel)</th>
+                                        <th class="p-2">Senarai Tetamu (Sistem Rumah Tumpangan)</th>
                                         <th class="p-2">Status</th>
                                         <th class="p-2">Tindakan</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="(submission, index) in submissions" :key="submission.id" class="border-t align-top">
+                                    <tr
+                                        v-for="(submission, index) in submissions"
+                                        :key="submission.id"
+                                        class="border-t align-top"
+                                        :class="index % 2 === 0 ? 'bg-background' : 'bg-muted'"
+                                    >
                                         <td class="p-2">{{ index + 1 }}</td>
                                         <td class="p-2">{{ submission.hotel_name ?? '-' }}</td>
                                         <td class="p-2">{{ formatMonthYear(submission.month, submission.year) }}</td>

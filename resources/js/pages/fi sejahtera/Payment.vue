@@ -150,7 +150,7 @@ function toggleDailyDetails() {
 </script>
 
 <template>
-    <Head title="Pembayaran ke Perbendaharaan" />
+    <Head title="Laporan Pembayaran Fi" />
 
     <div class="flex min-h-screen bg-muted/30">
         <FiSejahteraSidebar />
@@ -160,9 +160,9 @@ function toggleDailyDetails() {
 
             <main class="flex-1 space-y-6 p-6">
                 <div>
-                    <h1 class="text-2xl font-bold text-foreground">Pembayaran ke Perbendaharaan</h1>
+                    <h1 class="text-2xl font-bold text-foreground">Laporan Pembayaran Fi</h1>
                     <p class="text-sm text-muted-foreground">
-                        Semak jumlah kutipan cukai bulanan sebelum membuat bayaran kepada bendahari.
+                        Semak jumlah kutipan cukai bulanan sebelum membuat bayaran kepada Perbendaharaan.
                     </p>
                 </div>
 
@@ -173,12 +173,12 @@ function toggleDailyDetails() {
                     <CardContent>
                         <div class="grid gap-4 md:grid-cols-3">
                             <div class="space-y-2">
-                                <label class="text-sm font-medium text-foreground">Hotel</label>
+                                <label class="text-sm font-medium text-foreground">Rumah Tumpangan</label>
                                 <select
                                     v-model="selectedHotelId"
                                     class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                 >
-                                    <option value="">-- Pilih Hotel --</option>
+                                    <option value="">-- Pilih Rumah Tumpangan --</option>
                                     <option
                                         v-for="hotel in ownedHotels"
                                         :key="hotel.id"

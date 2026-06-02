@@ -388,7 +388,7 @@ function resetFilters() {
 </script>
 
 <template>
-    <Head title="Urus Staf" />
+    <Head title="Tetapan Staf" />
 
     <div class="flex min-h-screen bg-muted/30">
         <FiSejahteraSidebar />
@@ -398,7 +398,7 @@ function resetFilters() {
 
             <main class="flex-1 space-y-6 p-6">
                 <div>
-                    <h1 class="text-2xl font-bold text-foreground">Urus Staf</h1>
+                    <h1 class="text-2xl font-bold text-foreground">Tetapan Staf</h1>
                     <p class="text-sm text-muted-foreground">Senarai staf hotel dan pendaftaran staf baharu.</p>
                 </div>
 
@@ -418,7 +418,7 @@ function resetFilters() {
                 <template v-else>
                     <Card>
                         <CardHeader>
-                            <CardTitle>Penapis Staf</CardTitle>
+                            <CardTitle>Tapis Staf</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <form class="grid grid-cols-1 gap-4 md:grid-cols-3" @submit.prevent="applyFilters">
@@ -432,13 +432,13 @@ function resetFilters() {
                                 </div>
 
                                 <div>
-                                    <Label for="staff_hotel_filter" class="mb-1">Hotel</Label>
+                                    <Label for="staff_hotel_filter" class="mb-1">Rumah Tumpangan</Label>
                                     <select
                                         id="staff_hotel_filter"
                                         v-model="selectedHotelId"
                                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                     >
-                                        <option value="">Semua Hotel</option>
+                                        <option value="">Semua Rumah Tumpangan</option>
                                         <option v-for="hotel in hotels" :key="hotel.id" :value="String(hotel.id)">
                                             {{ hotel.name }}
                                         </option>
@@ -466,7 +466,7 @@ function resetFilters() {
                                             <th class="p-2">Bil.</th>
                                             <th class="p-2">Nama</th>
                                             <th class="p-2">Emel</th>
-                                            <th class="p-2">Nama Hotel</th>
+                                            <th class="p-2">Rumah Tumpangan</th>
                                             <th class="p-2">Jawatan</th>
                                             <th class="p-2">No Telefon</th>
                                             <th class="p-2">Aksi</th>
@@ -477,6 +477,7 @@ function resetFilters() {
                                             v-for="(staff, index) in (page.props as any).staff"
                                             :key="staff.id"
                                             class="border-t"
+                                            :class="Number(index) % 2 === 0 ? 'bg-background' : 'bg-muted'"
                                         >
                                             <td class="p-2">{{ Number(index) + 1 }}</td>
                                             <td class="p-2">{{ staff.user?.name || '-' }}</td>
@@ -515,13 +516,13 @@ function resetFilters() {
 
                             <form class="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 [&_input:not([type='radio'])]:mt-1 [&_select]:mt-1" @submit.prevent="submitStaff">
                                 <div>
-                                    <Label for="add_hotel_id">Nama Hotel</Label>
+                                    <Label for="add_hotel_id">Nama Rumah Tumpangan</Label>
                                     <select
                                         id="add_hotel_id"
                                         v-model="addForm.hotel_id"
                                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                     >
-                                        <option value="" disabled>-- Pilih Hotel --</option>
+                                        <option value="" disabled>-- Pilih Rumah Tumpangan --</option>
                                         <option v-for="hotel in hotels" :key="hotel.id" :value="String(hotel.id)">
                                             {{ hotel.name }}
                                         </option>
@@ -715,13 +716,13 @@ function resetFilters() {
 
                             <form class="mt-2 grid grid-cols-1 gap-4 md:grid-cols-2 [&_input:not([type='radio'])]:mt-1 [&_select]:mt-1" @submit.prevent="submitEditStaff">
                                 <div>
-                                    <Label for="edit_hotel_id">Nama Hotel</Label>
+                                    <Label for="edit_hotel_id">Nama Rumah Tumpangan</Label>
                                     <select
                                         id="edit_hotel_id"
                                         v-model="editForm.hotel_id"
                                         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                     >
-                                        <option value="" disabled>-- Pilih Hotel --</option>
+                                        <option value="" disabled>-- Pilih Rumah Tumpangan --</option>
                                         <option v-for="hotel in hotels" :key="hotel.id" :value="String(hotel.id)">
                                             {{ hotel.name }}
                                         </option>
