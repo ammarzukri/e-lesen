@@ -12,6 +12,7 @@ type LicenseApplication = {
 	ic_no?: string
 	company_name?: string
 	status?: string
+	remarks?: string
 	payment_status?: string
 	payment_amount?: number
 	created_at?: string
@@ -232,18 +233,31 @@ function formatDate(dateString?: string): string {
 
 							<div class="px-4 pb-4 pt-1 border-t border-slate-200 dark:border-slate-700 space-y-6">
 								<div
-										v-if="getPaymentStatus(application) === 'Berjaya' && getLicense(application)?.license_number"
-										class="mt-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40 px-4 py-3 text-sm"
-									>
-										<div class="text-xs font-semibold text-slate-600 dark:text-slate-400">No Lesen</div>
-										<div class="text-base font-bold text-slate-900 dark:text-slate-100">{{ getLicense(application)?.license_number }}</div>
-										<div class="mt-2 text-xs text-slate-600 dark:text-slate-400">
-											Tarikh mula {{ formatDate(getLicense(application)?.start_date) }}
-										</div>
-										<div class="mt-2 text-xs text-slate-600 dark:text-slate-400">
-											Sah sehingga {{ formatDate(getLicense(application)?.expiry_date) }}
+									v-if="getPaymentStatus(application) === 'Berjaya' && getLicense(application)?.license_number"
+									class="mt-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40 px-4 py-3 text-sm"
+								>
+									<div class="text-xs font-semibold text-slate-600 dark:text-slate-400">No Lesen</div>
+									<div class="text-base font-bold text-slate-900 dark:text-slate-100">{{ getLicense(application)?.license_number }}</div>
+									<div class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+										Tarikh mula {{ formatDate(getLicense(application)?.start_date) }}
+									</div>
+									<div class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+										Sah sehingga {{ formatDate(getLicense(application)?.expiry_date) }}
+									</div>
+								</div>
+
+								<section>
+									<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
+										Ulasan Penolakan
+									</h3>
+
+									<div class="rounded-xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-3">
+										<div class="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap">
+											{{ application.remarks || '-' }}
 										</div>
 									</div>
+								</section>
+
 								<section>
 									<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Maklumat Pemohon</h3>
 									<div class="grid grid-cols-1 md:grid-cols-2 gap-4">

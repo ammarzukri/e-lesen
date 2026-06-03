@@ -1078,13 +1078,18 @@ class LicenseApplicationController extends Controller
         return redirect()->back();
     }
 
-    public function reject(LicenseApplication $application)
+    public function reject(Request $request, LicenseApplication $application)
     {
         $this->ensurePbtAdmin();
         $this->authorizePbtAdminApplication($application);
 
+        $validated = $request->validate([
+            'remarks' => ['required', 'string', 'max:1000'],
+        ]);
+
         $application->update([
             'status' => 'Ditolak',
+            'remarks' => trim((string) $validated['remarks']),
         ]);
 
         return redirect()->back();

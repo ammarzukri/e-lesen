@@ -80,6 +80,7 @@ type LicenseApplication = {
     company_district_hq?: string;
     company_phone_hq?: string;
     status?: string;
+    remarks?: string;
     created_at?: string;
     license_types?: LicenseType[];
     additional_infos?: AdvertisementInfo[];
@@ -151,6 +152,8 @@ const dateFormatter = new Intl.DateTimeFormat('en-GB', {
 const previewUrl = ref<string | null>(null);
 const previewTitle = ref<string>('');
 const previewType = ref<'image' | 'pdf' | 'unknown'>('unknown');
+const rejectModalOpen = ref<boolean>(false);
+const rejectRemarks = ref<string>('');
 
 function formatDate(value?: string) {
     if (!value) return '-';
@@ -278,7 +281,29 @@ function approve() {
 }
 
 function reject() {
-    router.post(`/admin/license-applications/${props.application.id}/reject`);
+    rejectRemarks.value = '';
+    rejectModalOpen.value = true;
+}
+
+function closeRejectModal() {
+    rejectModalOpen.value = false;
+    rejectRemarks.value = '';
+}
+
+function submitReject() {
+    const normalizedRemarks = rejectRemarks.value.trim();
+
+    if (!normalizedRemarks) {
+        return;
+    }
+
+    router.post(`/admin/license-applications/${props.application.id}/reject`, {
+        remarks: normalizedRemarks,
+    }, {
+        onSuccess: () => {
+            closeRejectModal();
+        },
+    });
 }
 </script>
 
@@ -1068,6 +1093,19 @@ function reject() {
                             </div>
                         </div>
                     </section>
+
+                    <section>
+                        <h3
+                            class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4"
+                        >
+                            Ulasan Penolakan
+                        </h3>
+                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+                            <div class="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap">
+                                {{ application.remarks || '-' }}
+                            </div>
+                        </div>
+                    </section>
                 </div>
 
                 <div
@@ -1092,6 +1130,54 @@ function reject() {
             </div>
         </div>
     </AppLayout>
+
+    <div
+        v-if="rejectModalOpen"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        @click.self="closeRejectModal"
+    >
+        <div class="w-full max-w-lg rounded-xl bg-white dark:bg-slate-900 p-4">
+            <div class="mb-3">
+                <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                    Sebab Penolakan Permohonan
+                </h3>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                    Sila berikan ulasan sebelum menolak permohonan ini.
+                </p>
+            </div>
+
+            <textarea
+                v-model="rejectRemarks"
+                rows="4"
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:ring-red-900/40"
+                placeholder="Contoh: Dokumen tidak lengkap / maklumat tidak sah..."
+            />
+            <p
+                v-if="!rejectRemarks.trim()"
+                class="mt-2 text-xs text-red-600 dark:text-red-400"
+            >
+                Sila isi sebab penolakan.
+            </p>
+
+            <div class="mt-4 flex items-center justify-end gap-2">
+                <button
+                    type="button"
+                    class="px-3 py-2 rounded-lg bg-slate-200 text-slate-800 text-sm font-semibold hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                    @click="closeRejectModal"
+                >
+                    Batal
+                </button>
+                <button
+                    type="button"
+                    class="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="!rejectRemarks.trim()"
+                    @click="submitReject"
+                >
+                    Tolak Permohonan
+                </button>
+            </div>
+        </div>
+    </div>
 
     <div
         v-if="previewUrl"

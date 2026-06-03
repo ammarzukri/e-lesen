@@ -13,6 +13,7 @@ class LicenseApplication extends Model
         'user_id',
         'pbt_name',
         'status',
+        'remarks',
         'email',
         'company_name',
         'hotel_name',
