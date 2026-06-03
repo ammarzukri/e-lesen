@@ -235,6 +235,12 @@ function fileUrlById(id?: number) {
     return `/admin/license-documents/${id}`;
 }
 
+function downloadUrlById(id?: number) {
+    const url = fileUrlById(id);
+    if (!url) return null;
+    return `${url}?download=1`;
+}
+
 function getFileExtension(path?: string) {
     if (!path) return '';
     const cleanPath = path.split('?')[0].split('#')[0];
@@ -826,7 +832,7 @@ function reject() {
                                     <div
                                         class="text-sm font-semibold text-slate-600 dark:text-slate-400"
                                     >
-                                        Jenis Lesen
+                                        Kategori Lesen
                                     </div>
                                     <div
                                         class="text-md text-slate-900 dark:text-slate-100"
@@ -944,23 +950,65 @@ function reject() {
 
                                         </div>
                                     </div>
-                                    <div>
+                                    <div class="md:flex md:flex-col md:items-end">
                                         <div
-                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400 md:w-28 md:text-center"
                                         >
-                                            Fail
+                                            Tindakan
                                         </div>
                                         <div
                                             class="text-sm text-slate-900 dark:text-slate-100"
                                         >
-                                            <button
+                                            <div
                                                 v-if="doc.file_path"
-                                                type="button"
-                                                class="text-blue-600 hover:text-blue-700 underline text-left"
-                                                @click="openPreview(doc, documentTypeMap[doc.document_type ?? ''] || 'Dokumen')"
+                                                class="flex flex-wrap items-center gap-3 md:w-28 md:justify-between"
                                             >
-                                                {{ doc.file_path }}
-                                            </button>
+                                                <button
+                                                    type="button"
+                                                    class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800/60 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                                                    :aria-label="`Lihat`"
+                                                    :title="`Lihat`"
+                                                    @click="openPreview(doc, documentTypeMap[doc.document_type ?? ''] || 'Dokumen')"
+                                                >
+                                                    <svg
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        stroke-width="2"
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        class="h-4 w-4"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+                                                        <circle cx="12" cy="12" r="3" />
+                                                    </svg>
+                                                </button>
+                                                <a
+                                                    v-if="downloadUrlById(doc.id)"
+                                                    :href="downloadUrlById(doc.id) || undefined"
+                                                    class="inline-flex h-10 w-10 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                                                    :aria-label="`Muat Turun`"
+                                                    :title="`Muat Turun`"
+                                                >
+                                                    <svg
+                                                        xmlns="http://www.w3.org/2000/svg"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        stroke-width="2"
+                                                        stroke-linecap="round"
+                                                        stroke-linejoin="round"
+                                                        class="h-4 w-4"
+                                                        aria-hidden="true"
+                                                    >
+                                                        <path d="M12 3v12" />
+                                                        <path d="m7 10 5 5 5-5" />
+                                                        <path d="M5 21h14" />
+                                                    </svg>
+                                                </a>
+                                            </div>
                                             <span v-else>-</span>
                                         </div>
                                     </div>

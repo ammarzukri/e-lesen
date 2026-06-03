@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { App, Link, usePage } from '@inertiajs/vue3';
-import { FolderOpen, AppWindow, Airplay, Info, Timer } from 'lucide-vue-next';
+import { FolderOpen, AppWindow, LayoutGrid, Info, Timer } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -31,7 +31,7 @@ const mainNavItems = computed<NavItem[]>(() => {
             {
                 title: 'Dashboard',
                 href: dashboard(),
-                icon: Airplay,
+                icon: LayoutGrid,
             },
             {
                 title: 'Senarai Permohonan',
@@ -51,7 +51,7 @@ const mainNavItems = computed<NavItem[]>(() => {
             {
                 title: 'Dashboard',
                 href: dashboard(),
-                icon: Airplay,
+                icon: LayoutGrid,
             },
             {
                 title: 'Status Lesen Penginapan',
@@ -65,7 +65,7 @@ const mainNavItems = computed<NavItem[]>(() => {
         {
             title: 'Dashboard',
             href: dashboard(),
-            icon: Airplay,
+            icon: LayoutGrid,
         },
         {
             title: 'Mohon Lesen Penginapan',

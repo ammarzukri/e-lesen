@@ -102,7 +102,7 @@ withDefaults(
 
                     <div class="flex-1 p-6 pb-12 text-[13px] leading-5 lg:p-20">
                         <div v-if="status" class="mb-4 text-center text-sm font-medium text-green-600">{{ status }}</div>
-                        <h1 class="w-full text-center text-3xl font-extrabold text-black dark:text-white drop-shadow-sm mb-6">Sistem Fi Sejahtera</h1>
+                        <h1 class="w-full text-center text-3xl font-extrabold text-black dark:text-white drop-shadow-sm mb-6">Sistem Pengurusan <br> Fi Sejahtera (SPS)</h1>
 
                         <Form v-bind="store.form()" :reset-on-success="['password']" v-slot="{ errors, processing }" class="flex flex-col gap-6">
                             <div class="grid gap-6">

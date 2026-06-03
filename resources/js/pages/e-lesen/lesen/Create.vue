@@ -1123,6 +1123,39 @@ function handleDocumentChange(index: number, event: Event) {
   }
 }
 
+function hasUploadedDocument(index: number) {
+  switch (index) {
+    case 1:
+      return Boolean(form.value.document1File || form.value.document1Name)
+    case 2:
+      return Boolean(form.value.document2File || form.value.document2Name)
+    case 3:
+      return Boolean(form.value.document3File || form.value.document3Name)
+    case 4:
+      return Boolean(form.value.document4File || form.value.document4Name)
+    case 5:
+      return Boolean(form.value.document5File || form.value.document5Name)
+    case 6:
+      return Boolean(form.value.document6File || form.value.document6Name)
+    case 7:
+      return Boolean(form.value.document7File || form.value.document7Name)
+    case 8:
+      return Boolean(form.value.document8File || form.value.document8Name)
+    case 9:
+      return Boolean(form.value.document9File || form.value.document9Name)
+    case 10:
+      return Boolean(form.value.document10File || form.value.document10Name)
+    default:
+      return false
+  }
+}
+
+function getDocumentButtonClass(index: number) {
+  return hasUploadedDocument(index)
+    ? 'bg-green-600 hover:bg-green-700 text-white dark:bg-green-500 dark:hover:bg-green-600 dark:text-white'
+    : 'bg-gray-200 hover:bg-gray-300 text-slate-900 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100'
+}
+
 function enforceNumericValue(event: Event) {
   const target = event.target as HTMLInputElement
   const sanitized = target.value.replace(/\D+/g, '')
@@ -1680,12 +1713,12 @@ function getPbtCardClass(index: number) {
           <div class="mt-4 space-y-6">
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Jenis Lesen Yang Dipohon</h2>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">Kategori Lesen Yang Dipohon</h2>
                 <select
                   v-model="form.company_info.license_type_selected"
                   class="w-full px-3 py-2 rounded-xl border border-gray-300 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"
                 >
-                  <option value="">-- Pilih Jenis Lesen --</option>
+                  <option value="">-- Pilih Kategori Lesen --</option>
                   <option v-for="option in licenseTypeOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
                 </select>
               </div>
@@ -1861,7 +1894,8 @@ function getPbtCardClass(index: number) {
 
                 <div class="flex items-center gap-3 mt-2">
                   <label
-                    class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100"
+                    class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors"
+                    :class="getDocumentButtonClass(1)"
                   >
                     <input
                       type="file"
@@ -1880,7 +1914,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">ii) Pelan lokasi premis perniagaan beserta gambar premis</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(2)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(2, e)" />
                     <span>Choose File</span>
                   </label>
@@ -1891,7 +1925,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">iii) Pelan lantai premis / kawasan (ukuran dalam meter persegi)</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(3)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(3, e)" />
                     <span>Choose File</span>
                   </label>
@@ -1902,7 +1936,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">iv) Surat perjanjian atau kebenaran tuan bangunan / tanah yang disetemkan (jika bangunan / tanah yang disewa)</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(4)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(4, e)" />
                     <span>Choose File</span>
                   </label>
@@ -1913,7 +1947,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">v) Salinan geran tanah / Lesen Pendudukan Sementara (LPS) / lain-lain dokumen yang berkaitan</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(5)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(5, e)" />
                     <span>Choose File</span>
                   </label>
@@ -1926,7 +1960,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">vi) Salinan Sijil Kelayakan Menduduki Bangunan / Sementara (CF/CCC) (TCF)</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(6)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(6, e)" />
                     <span>Choose File</span>
                   </label>
@@ -1937,7 +1971,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">vii) Gambar pemohon berukuran passport</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(7)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(7, e)" />
                     <span>Choose File</span>
                   </label>
@@ -1948,7 +1982,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">viii) Salinan Kad Pengenalan pemohon</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(8)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(8, e)" />
                     <span>Choose File</span>
                   </label>
@@ -1959,7 +1993,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">ix) Senarai nama semua Pengendali Makanan / Pembantu (Perniagaan Makanan) serta Kad Pengenalan dan gambar berukuran passport bagi setiap orang (jika berkenaan)</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(9)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(9, e)" />
                     <span>Choose File</span>
                   </label>
@@ -1970,7 +2004,7 @@ function getPbtCardClass(index: number) {
               <div class="flex flex-col">
                 <label class="text-sm font-medium mb-1 text-slate-700 dark:text-slate-200">x) Carta Proses Pengeluaran Pengilangan / Pemerosesan (jika ada)</label>
                 <div class="flex items-center gap-3">
-                  <label class="inline-flex w-fit items-center px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-xl cursor-pointer dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100">
+                  <label class="inline-flex w-fit items-center px-3 py-1 rounded-xl cursor-pointer transition-colors" :class="getDocumentButtonClass(10)">
                     <input type="file" class="hidden" @change="(e) => handleDocumentChange(10, e)" />
                     <span>Choose File</span>
                   </label>
@@ -2226,11 +2260,11 @@ function getPbtCardClass(index: number) {
                 </div>
 
                 <div class="mt-6">
-                  <div class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Jenis Lesen Yang Dipohon</div>
+                  <div class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Kategori Lesen Yang Dipohon</div>
                   <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Jenis Lesen</div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Kategori Lesen</div>
                         <div class="text-sm text-slate-900 dark:text-slate-100">{{ selectedLicenseTypeLabel || '-' }}</div>
                       </div>
                       <div>

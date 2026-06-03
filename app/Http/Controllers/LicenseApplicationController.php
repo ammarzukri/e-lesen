@@ -1090,7 +1090,7 @@ class LicenseApplicationController extends Controller
         return redirect()->back();
     }
 
-    public function adminDocument(LicenseDocument $document)
+    public function adminDocument(Request $request, LicenseDocument $document)
     {
         $this->ensureAdmin();
 
@@ -1107,6 +1107,19 @@ class LicenseApplicationController extends Controller
 
         if (!Storage::disk('local')->exists($document->file_path)) {
             abort(404);
+        }
+
+        if ($request->boolean('download')) {
+            $document->loadMissing('licenseApplication:id,hotel_name');
+
+            $extension = pathinfo($document->file_path, PATHINFO_EXTENSION);
+            $documentName = $document->document_type ?: 'dokumen';
+            $hotelName = $document->licenseApplication?->hotel_name ?: 'hotel';
+            $baseName = $documentName . '_' . $hotelName;
+            $safeName = Str::slug($baseName, '_');
+            $fileName = $safeName . ($extension ? '.' . $extension : '');
+
+            return Storage::disk('local')->download($document->file_path, $fileName);
         }
 
         return Storage::disk('local')->response($document->file_path);
