@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use App\Http\Controllers\LicenseApplicationController;
 use App\Http\Controllers\FiSejahteraController;
 use App\Http\Controllers\CountryController;
+use App\Models\District;
 use App\Models\HotelStaff;
 use App\Models\License;
 use App\Models\LicenseApplication;
@@ -32,16 +33,16 @@ Route::get('dashboard', function () {
     $isPbtAdmin = $user && $user->role === 'pbt_admin';
 
     if ($isBktAdmin || $isPbtAdmin) {
-        $applicationsQuery = LicenseApplication::query();
+        $applicationsQuery = LicenseApplication::query()->with('pbtDistrict');
 
         if ($isPbtAdmin) {
-            $pbtName = trim((string) $user->pbt_name);
+            $pbtDistrictId = $user?->district_id;
 
-            if ($pbtName === '') {
+            if (! $pbtDistrictId) {
                 abort(403, 'Akaun pbt_admin tidak mempunyai PBT yang ditetapkan.');
             }
 
-            $applicationsQuery->where('pbt_name', $pbtName);
+            $applicationsQuery->where('district_id', $pbtDistrictId);
         }
 
         $totalApplications = (clone $applicationsQuery)->count();
@@ -50,15 +51,16 @@ Route::get('dashboard', function () {
         $blockedApplications = (clone $applicationsQuery)->where('status', 'Disekat')->count();
 
         // only count approved applications per PBT for the pie chart
+        $districtNames = District::query()->pluck('district_name', 'id');
         $byPbt = (clone $applicationsQuery)
             ->where('status', 'Diluluskan')
-            ->select('pbt_name', DB::raw('count(*) as total'))
-            ->groupBy('pbt_name')
+            ->select('district_id', DB::raw('count(*) as total'))
+            ->groupBy('district_id')
             ->orderByDesc('total')
             ->get()
-            ->map(function ($row) {
+            ->map(function ($row) use ($districtNames) {
                 return [
-                    'name' => $row->pbt_name ?: 'Tidak Dinyatakan',
+                    'name' => $districtNames[$row->district_id] ?? 'Tidak Dinyatakan',
                     'total' => (int) $row->total,
                 ];
             })
@@ -80,7 +82,7 @@ Route::get('dashboard', function () {
     if ($user && $user->role === 'staff') {
         $staffHotelId = HotelStaff::where('user_id', $user->id)->value('hotel_id');
 
-        $staffApplications = LicenseApplication::query()->with(['licenseTypes', 'hotel.license']);
+        $staffApplications = LicenseApplication::query()->with(['licenseTypes', 'pbtDistrict', 'hotel.license']);
 
         if ($staffHotelId) {
             $staffApplications->whereHas('hotel', function ($query) use ($staffHotelId) {
@@ -107,7 +109,7 @@ Route::get('dashboard', function () {
                     'company_name' => $a->company_name,
                     'status' => $a->status,
                     'payment_status' => $a->payment_status,
-                    'pbt_name' => $a->pbt_name,
+                    'pbt_name' => $a->pbtDistrict?->district_name,
                     'start_date' => optional($a->hotel?->license?->start_date)->toDateString(),
                     'expiry_date' => optional($a->hotel?->license?->expiry_date)->toDateString(),
                     'license_status' => $a->hotel?->license?->status,
@@ -143,7 +145,7 @@ Route::get('dashboard', function () {
 
     $pendingApplications = max(0, $totalApplications - $approvedApplications - $rejectedApplications);
 
-    $recentApplications = LicenseApplication::with(['licenseTypes', 'hotel.license'])
+    $recentApplications = LicenseApplication::with(['licenseTypes', 'pbtDistrict', 'hotel.license'])
         ->where('user_id', $user->id)
         ->latest()
         ->limit(5)
@@ -156,7 +158,7 @@ Route::get('dashboard', function () {
                 'company_name' => $a->company_name,
                 'status' => $a->status,
                 'payment_status' => $a->payment_status,
-                'pbt_name' => $a->pbt_name,
+                'pbt_name' => $a->pbtDistrict?->district_name,
                 'start_date' => optional($a->hotel?->license?->start_date)->toDateString(),
                 'expiry_date' => optional($a->hotel?->license?->expiry_date)->toDateString(),
                 'license_status' => $a->hotel?->license?->status,
@@ -413,4 +415,12 @@ Route::post('/admin/license-renewals/{renewal}/reject', [LicenseApplicationContr
     ->middleware(['auth'])
     ->name('admin.license.renewals.reject');
 
+Route::get('/admin/license-additional-activities', [LicenseApplicationController::class, 'additionalActivityIndex'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities');
+
+Route::get('/admin/license-additional-activities/{activity}', [LicenseApplicationController::class, 'additionalActivityShow'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.show');
+    
 require __DIR__.'/settings.php';

@@ -28,6 +28,11 @@ interface ApplicantInfo {
 
 const props = defineProps<{
   currentUserId?: number | null
+  currentUserDistrictId?: number | null
+  districts?: Array<{
+    id: number
+    district_name: string
+  }>
   initialApplicantInfo?: Partial<ApplicantInfo> | null
   processFeePayment?: {
     status?: string | null
@@ -74,6 +79,20 @@ const LEGACY_LICENSE_APPLICATION_DRAFT_KEY = 'license-application-create-draft-v
 const currentUserDraftKey = computed(() => {
   const userId = props.currentUserId
   return userId ? `license-application-create-draft-v1-user-${userId}` : LEGACY_LICENSE_APPLICATION_DRAFT_KEY
+})
+
+const availableDistricts = computed(() => props.districts ?? [])
+
+const districtNameById = computed(() => new Map(availableDistricts.value.map((district) => [district.id, district.district_name])))
+
+function getDistrictIdByName(districtName: string) {
+  return availableDistricts.value.find((district) => district.district_name === districtName)?.id ?? null
+}
+
+const selectedDistrictName = computed(() => {
+  return form.value.district_id === null
+    ? ''
+    : districtNameById.value.get(form.value.district_id) ?? ''
 })
 
 function goToStep(targetStep: number) {
@@ -272,7 +291,7 @@ const districtMap: Record<string, string[]> = {
 
 
 const form = ref({
-  pbt_name: '',
+  district_id: props.currentUserDistrictId ?? null,
   applicant_info: {
     name: '',
     ic_no: '',
@@ -526,6 +545,11 @@ function restoreFormDraft() {
 
     if (draft.form) {
       const draftForm = draft.form as typeof form.value
+      const legacyDraftForm = draft.form as typeof form.value & { pbt_name?: string }
+
+      if (draftForm.district_id == null && legacyDraftForm.pbt_name) {
+        draftForm.district_id = getDistrictIdByName(legacyDraftForm.pbt_name)
+      }
 
       Object.assign(form.value, {
         ...draftForm,
@@ -887,7 +911,7 @@ function submitForm() {
     .filter((row) => row.keluasan_mps || row.jenis)
 
   const payload = {
-    pbt_name: form.value.pbt_name,
+    district_id: form.value.district_id,
     applicant_info: form.value.applicant_info,
     company_info: companyInfo,
     advertisement_info: advertisementInfoPayload,
@@ -1256,18 +1280,18 @@ function getPbtCardClass(index: number) {
               class="flex items-center gap-4 rounded-2xl border p-4 shadow-sm cursor-pointer transition"
               :class="[
                 getPbtCardClass(cardIndex),
-                form.pbt_name === card.name
+                form.district_id === getDistrictIdByName(card.name)
                   ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30'
                   : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-blue-300 dark:hover:border-blue-500',
               ]"
-              @click="form.pbt_name = card.name"
+              @click="form.district_id = getDistrictIdByName(card.name)"
             >
               <img :src="card.logo" :alt="card.name" class="h-12 w-12 object-contain" />
               <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ card.name }}</div>
             </div>
           </div>
-          <div v-if="form.pbt_name" class="mt-4 text-sm text-slate-600 dark:text-slate-300">
-            PBT dipilih: <span class="font-semibold text-slate-900 dark:text-slate-100">{{ form.pbt_name }}</span>
+          <div v-if="selectedDistrictName" class="mt-4 text-sm text-slate-600 dark:text-slate-300">
+            PBT dipilih: <span class="font-semibold text-slate-900 dark:text-slate-100">{{ selectedDistrictName }}</span>
           </div>
           <hr class="my-6 border-t border-gray-200" />
         </div>
@@ -2081,7 +2105,7 @@ function getPbtCardClass(index: number) {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">PBT Dipilih</div>
-                    <div class="text-sm text-slate-900 dark:text-slate-100">{{ form.pbt_name || '-' }}</div>
+                    <div class="text-sm text-slate-900 dark:text-slate-100">{{ selectedDistrictName || '-' }}</div>
                   </div>
                 </div>
               </section>

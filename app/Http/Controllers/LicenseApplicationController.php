@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use App\Models\District;
 use App\Models\Hotel;
 use App\Models\HotelStaff;
 use App\Models\License;
@@ -55,14 +56,19 @@ class LicenseApplicationController extends Controller
         abort_unless($this->isPbtAdmin(), 403);
     }
 
+    protected function pbtAdminDistrictId(): ?int
+    {
+        return auth()->user()?->district_id;
+    }
+
     protected function pbtAdminName(): string
     {
-        return trim((string) auth()->user()?->pbt_name);
+        return trim((string) auth()->user()?->pbtDistrict?->district_name);
     }
 
     protected function ensurePbtAdminHasPbt(): void
     {
-        if ($this->isPbtAdmin() && $this->pbtAdminName() === '') {
+        if ($this->isPbtAdmin() && ($this->pbtAdminDistrictId() === null || $this->pbtAdminName() === '')) {
             abort(403, 'Akaun pbt_admin tidak mempunyai PBT yang ditetapkan.');
         }
     }
@@ -71,7 +77,7 @@ class LicenseApplicationController extends Controller
     {
         if ($this->isPbtAdmin()) {
             $this->ensurePbtAdminHasPbt();
-            $query->where('pbt_name', $this->pbtAdminName());
+            $query->where('district_id', $this->pbtAdminDistrictId());
         }
 
         return $query;
@@ -84,7 +90,7 @@ class LicenseApplicationController extends Controller
         }
 
         $this->ensurePbtAdminHasPbt();
-        abort_unless(trim((string) $application->pbt_name) === $this->pbtAdminName(), 403);
+        abort_unless((int) $application->district_id === (int) $this->pbtAdminDistrictId(), 403);
     }
 
     protected function ensureNotStaff(): void
@@ -97,6 +103,7 @@ class LicenseApplicationController extends Controller
         $this->ensureNotStaff();
 
         $user = auth()->user();
+        $districts = District::query()->orderBy('district_name')->get(['id', 'district_name']);
         $processFeePayment = $this->latestUnconsumedProcessFeePayment(auth()->id());
 
         if ($processFeePayment && $processFeePayment->payment_status === 'Dalam Proses') {
@@ -108,6 +115,8 @@ class LicenseApplicationController extends Controller
 
         return Inertia::render('e-lesen/lesen/Create', [
             'currentUserId' => $user?->id,
+            'currentUserDistrictId' => $user?->district_id,
+            'districts' => $districts,
             'initialApplicantInfo' => [
                 'name' => $user?->name,
                 'ic_no' => $user?->ic_no,
@@ -860,6 +869,7 @@ class LicenseApplicationController extends Controller
 
         $applicationsQuery = LicenseApplication::with([
             'user',
+            'pbtDistrict',
             'hotel.license',
             'hotel.taxSubmissions' => function ($query) use ($currentMonth, $currentYear) {
                 $query
@@ -879,13 +889,14 @@ class LicenseApplicationController extends Controller
                 'name',
                 'company_name',
                 'hotel_name',
-                'pbt_name',
+                'district_id',
                 'status',
                 'payment_status',
                 'created_at',
             ])
             ->map(function (LicenseApplication $application) {
                 $application = $this->hydrateApplicantFromUser($application);
+                $application->setAttribute('pbt_name', $application->pbtDistrict?->district_name);
 
                 $isFiSejahteraPaid = (bool) $application->hotel?->taxSubmissions?->isNotEmpty();
                 $application->setAttribute('fi_sejahtera_status', $isFiSejahteraPaid ? 'Dibayar' : 'Belum Dibayar');
@@ -911,8 +922,9 @@ class LicenseApplicationController extends Controller
         $this->ensureAdmin();
         $this->authorizePbtAdminApplication($application);
 
-        $application->load(['user', 'licenseTypes', 'additionalInfos', 'documents', 'hotel.license']);
+        $application->load(['user', 'pbtDistrict', 'licenseTypes', 'additionalInfos', 'documents', 'hotel.license']);
         $application = $this->hydrateApplicantFromUser($application);
+        $application->setAttribute('pbt_name', $application->pbtDistrict?->district_name);
 
         return Inertia::render('e-lesen/admin/LicenseApplicationShow', [
             'application' => $application,
@@ -1104,7 +1116,7 @@ class LicenseApplicationController extends Controller
 
             $application = LicenseApplication::query()
                 ->where('id', $document->license_application_id)
-                ->where('pbt_name', $this->pbtAdminName())
+                ->where('district_id', $this->pbtAdminDistrictId())
                 ->first();
 
             abort_unless($application, 403);
@@ -1135,7 +1147,7 @@ class LicenseApplicationController extends Controller
         $this->ensureNotStaff();
 
         $request->validate([
-            'pbt_name' => ['nullable', 'string'],
+            'district_id' => ['required', 'integer', 'exists:districts,id'],
             'applicant_info' => ['required', 'array'],
             'company_info' => ['required', 'array'],
             'license_type' => ['nullable', 'array'],
@@ -1197,6 +1209,7 @@ class LicenseApplicationController extends Controller
             $company = $request->input('company_info', []);
 
             auth()->user()?->update([
+                'district_id' => $request->input('district_id'),
                 'ic_no' => $applicant['ic_no'] ?? null,
                 'birth_date' => $applicant['birth_date'] ?? null,
                 'birth_place' => $applicant['birth_place'] ?? null,
@@ -1217,7 +1230,7 @@ class LicenseApplicationController extends Controller
             $licenseApplication = LicenseApplication::create([
                 'name' => $applicant['name'] ?? null,
                 'user_id' => auth()->id(),
-                'pbt_name' => $request->input('pbt_name'),
+                'district_id' => $request->input('district_id'),
                 'status' => 'Dalam Proses',
                 'email' => $applicant['email'] ?? null,
                 'company_name' => $company['company_name'] ?? null,
@@ -1314,12 +1327,14 @@ class LicenseApplicationController extends Controller
         }
 
         DB::transaction(function () use ($application) {
+            $application->loadMissing('pbtDistrict');
+
             $hotel = Hotel::updateOrCreate(
                 ['license_application_id' => $application->id],
                 [
                     'user_id' => $application->user_id,
                     'name' => $application->hotel_name ?: 'Hotel',
-                    'pbt_name' => $application->pbt_name,
+                    'pbt_name' => $application->pbtDistrict?->district_name,
                     'company_name' => $application->company_name,
                     'address' => $application->company_address,
                     'postcode' => $application->company_postcode,
@@ -1443,5 +1458,15 @@ class LicenseApplicationController extends Controller
         }
 
         return 'D';
+    }
+
+    public function additionalActivityIndex()
+    {
+        return Inertia::render('e-lesen/admin/AdditionalActivity');
+    }
+
+    public function additionalActivityShow()
+    {
+        return Inertia::render('e-lesen/admin/AdditionalActivityShow');
     }
 }

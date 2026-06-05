@@ -469,7 +469,7 @@ class FiSejahteraController extends Controller
 
     protected function pbtAdminName(?User $user = null): string
     {
-        return trim((string) ($user ?? auth()->user())?->pbt_name);
+        return trim((string) ($user ?? auth()->user())?->pbtDistrict?->district_name);
     }
 
     protected function ensurePbtAdminHasPbt(?User $user = null): void

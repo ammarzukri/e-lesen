@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LicenseApplication extends Model
 {
@@ -11,7 +12,7 @@ class LicenseApplication extends Model
     protected $fillable = [
         'name',
         'user_id',
-        'pbt_name',
+        'district_id',
         'status',
         'remarks',
         'email',
@@ -80,5 +81,10 @@ class LicenseApplication extends Model
     public function processFeePayment()
     {
         return $this->hasOne(LicenseProcessFeePayment::class, 'license_application_id');
+    }
+
+    public function pbtDistrict(): BelongsTo
+    {
+        return $this->belongsTo(District::class, 'district_id');
     }
 }

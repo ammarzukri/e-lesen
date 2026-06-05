@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 
 class User extends Authenticatable
@@ -23,7 +24,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
-        'pbt_name',
+        'district_id',
         'ic_no',
         'birth_date',
         'birth_place',
@@ -81,5 +82,10 @@ class User extends Authenticatable
     public function hotelStaff()
     {
         return $this->hasOne(HotelStaff::class);
+    }
+
+    public function pbtDistrict(): BelongsTo
+    {
+        return $this->belongsTo(District::class, 'district_id');
     }
 }
