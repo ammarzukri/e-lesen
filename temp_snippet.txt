@@ -1,0 +1,23 @@
+test_password_cannot_be_reset_with_expired_code(): void
+    {
+        $user = User::factory()->create();
+
+        DB::table('password_reset_codes')->insert([
+            'email' => $user->email,
+            'code' => Hash::make('123456'),
+            'expires_at' => now()->subMinute(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this->post(route('password.code.reset'), [
+            'email' => $user->email,
+            'code' => '123456',
+            'password' => 'newpassword123',
+            'password_confirmation' => 'newpassword123',
+        });
+
+        $response->assertSessionHasErrors('code');
+    }
+}
+
