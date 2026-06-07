@@ -434,5 +434,17 @@ Route::delete('/admin/license-additional-activities/{activity}', [LicenseApplica
 Route::get('/admin/license-additional-activities/{activity}', [LicenseApplicationController::class, 'additionalActivityShow'])
     ->middleware(['auth'])
     ->name('admin.license.additional-activities.show');
+
+Route::post('/admin/license-additional-activities/{activity}/rates', [LicenseApplicationController::class, 'storeAdditionalActivityRate'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.rates.store');
     
+Route::put('/admin/license-additional-activities/rates/{rate}', [LicenseApplicationController::class, 'updateAdditionalActivityRate'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.rates.update');
+
+Route::delete('/admin/license-additional-activities/rates/{rate}', [LicenseApplicationController::class, 'deleteAdditionalActivityRate'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.rates.destroy');
+
 require __DIR__.'/settings.php';

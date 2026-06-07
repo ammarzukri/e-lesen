@@ -16,6 +16,6 @@ class AdditionalActivityRate extends Model
 
     public function activity()
     {
-        return $this->belongsTo(AdditionalActivity::class);
+        return $this->belongsTo(AdditionalActivity::class, 'additional_activity_id');
     }
 }

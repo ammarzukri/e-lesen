@@ -19,6 +19,8 @@ use App\Models\LicenseApplication;
 use App\Models\LicenseDocument;
 use App\Models\LicenseProcessFeePayment;
 use App\Models\LicenseRenewal;
+use App\Models\AdditionalActivity;
+use App\Models\AdditionalActivityRate;
 
 class LicenseApplicationController extends Controller
 {
@@ -1551,5 +1553,46 @@ class LicenseApplicationController extends Controller
         }
 
         return redirect()->route('admin.license.additional-activities');
+    }
+
+    public function storeAdditionalActivityRate(Request $request, \App\Models\AdditionalActivity $activity)
+    {
+        $validated = $request->validate([
+            'type_name' => ['required', 'string', 'max:255'],
+            'min_area' => ['required', 'numeric'],
+            'max_area' => ['required', 'numeric'],
+            'amount' => ['required', 'numeric'],
+        ]);
+
+        AdditionalActivityRate::create([
+            'additional_activity_id' => $activity->id,
+            'type_name' => $validated['type_name'],
+            'min_area' => $validated['min_area'],
+            'max_area' => $validated['max_area'],
+            'amount' => $validated['amount'],
+        ]);
+
+        return back()->with('success', 'Kadar aktiviti berjaya ditambah.');
+    }
+
+    public function updateAdditionalActivityRate(Request $request, AdditionalActivityRate $rate)
+    {
+        $validated = $request->validate([
+            'type_name' => ['required'],
+            'min_area' => ['required', 'numeric'],
+            'max_area' => ['required', 'numeric'],
+            'amount' => ['required', 'numeric'],
+        ]);
+
+        $rate->update($validated);
+
+        return back()->with('success', 'Kadar dikemaskini.');
+    }
+
+    public function deleteAdditionalActivityRate(AdditionalActivityRate $rate)
+    {
+        $rate->delete();
+
+        return back()->with('success', 'Kadar dibuang.');
     }
 }

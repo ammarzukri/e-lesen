@@ -122,7 +122,7 @@ function deleteActivity(activity: { id: number }) {
                         class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                         @click="openAddModal"
                     >
-                        Tambah Aktiviti
+                        + Tambah Aktiviti
                     </button>
                 </div>
 
