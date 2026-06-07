@@ -1462,6 +1462,52 @@ class LicenseApplicationController extends Controller
         return 'D';
     }
 
+    public function additionalActivities(Request $request)
+    {
+        $this->ensureNotStaff();
+
+        $districtId = $request->integer('district_id');
+
+        if (! $districtId) {
+            return response()->json([
+                'activities' => [],
+            ]);
+        }
+
+        $activities = AdditionalActivity::query()
+            ->where('district_id', $districtId)
+            ->with([
+                'rates' => function ($query) {
+                    $query
+                        ->orderBy('min_area')
+                        ->orderBy('id');
+                },
+            ])
+            ->orderBy('activity_name')
+            ->get(['id', 'district_id', 'activity_name'])
+            ->map(function (AdditionalActivity $activity) {
+                return [
+                    'id' => $activity->id,
+                    'district_id' => $activity->district_id,
+                    'activity_name' => $activity->activity_name,
+                    'rates' => $activity->rates->map(function (AdditionalActivityRate $rate) {
+                        return [
+                            'id' => $rate->id,
+                            'type_name' => $rate->type_name,
+                            'min_area' => $rate->min_area !== null ? (float) $rate->min_area : null,
+                            'max_area' => $rate->max_area !== null ? (float) $rate->max_area : null,
+                            'amount' => $rate->amount !== null ? (float) $rate->amount : null,
+                        ];
+                    })->values(),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'activities' => $activities,
+        ]);
+    }
+
     public function additionalActivityIndex()
     {
         $query = \App\Models\AdditionalActivity::query()->withCount('rates')->orderBy('activity_name');
@@ -1560,7 +1606,7 @@ class LicenseApplicationController extends Controller
         $validated = $request->validate([
             'type_name' => ['required', 'string', 'max:255'],
             'min_area' => ['required', 'numeric'],
-            'max_area' => ['required', 'numeric'],
+            'max_area' => ['nullable', 'numeric'],
             'amount' => ['required', 'numeric'],
         ]);
 
@@ -1568,7 +1614,7 @@ class LicenseApplicationController extends Controller
             'additional_activity_id' => $activity->id,
             'type_name' => $validated['type_name'],
             'min_area' => $validated['min_area'],
-            'max_area' => $validated['max_area'],
+            'max_area' => $validated['max_area'] ?? null,
             'amount' => $validated['amount'],
         ]);
 
@@ -1580,11 +1626,16 @@ class LicenseApplicationController extends Controller
         $validated = $request->validate([
             'type_name' => ['required'],
             'min_area' => ['required', 'numeric'],
-            'max_area' => ['required', 'numeric'],
+            'max_area' => ['nullable', 'numeric'],
             'amount' => ['required', 'numeric'],
         ]);
 
-        $rate->update($validated);
+        $rate->update([
+            'type_name' => $validated['type_name'],
+            'min_area' => $validated['min_area'],
+            'max_area' => $validated['max_area'] ?? null,
+            'amount' => $validated['amount'],
+        ]);
 
         return back()->with('success', 'Kadar dikemaskini.');
     }

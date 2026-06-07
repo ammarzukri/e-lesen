@@ -22,7 +22,7 @@ return new class extends Migration
 
             $table->decimal('min_area', 10, 2);
 
-            $table->decimal('max_area', 10, 2);
+            $table->decimal('max_area', 10, 2) ->nullable();
 
             $table->decimal('amount', 10, 2);
 

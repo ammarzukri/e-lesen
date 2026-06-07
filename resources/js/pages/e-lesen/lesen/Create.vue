@@ -100,15 +100,23 @@ function goToStep(targetStep: number) {
   step.value = targetStep
 }
 
-const categoryCards = [
-  { name: 'Majlis Bandaraya Kuala Terengganu', logo: '/images/mbkt.png' },
-  { name: 'Majlis Perbandaran Kemaman', logo: '/images/mpk.png' },
-  { name: 'Majlis Perbandaran Dungun', logo: '/images/mpd.png' },
-  { name: 'Majlis Daerah Besut', logo: '/images/mdb.jpg' },
-  { name: 'Majlis Daerah Hulu Terengganu', logo: '/images/mdht.png' },
-  { name: 'Majlis Daerah Marang', logo: '/images/mdm.png' },
-  { name: 'Majlis Daerah Setiu', logo: '/images/mds.jpg' },
-]
+const districtLogoByName: Record<string, string> = {
+  'Majlis Bandaraya Kuala Terengganu': '/images/mbkt.png',
+  'Majlis Perbandaran Kemaman': '/images/mpk.png',
+  'Majlis Perbandaran Dungun': '/images/mpd.png',
+  'Majlis Daerah Besut': '/images/mdb.jpg',
+  'Majlis Daerah Hulu Terengganu': '/images/mdht.png',
+  'Majlis Daerah Marang': '/images/mdm.png',
+  'Majlis Daerah Setiu': '/images/mds.jpg',
+}
+
+const categoryCards = computed(() => {
+  return availableDistricts.value.map((district) => ({
+    id: district.id,
+    name: district.district_name,
+    logo: districtLogoByName[district.district_name] ?? '/images/mbkt.png',
+  }))
+})
 
 const malaysiaStates = [
   'Johor',
@@ -129,127 +137,118 @@ const malaysiaStates = [
   'Wilayah Persekutuan Putrajaya',
 ]
 
-const additionalActivityConfigs = [
-  {
-    key: 'papan_iklan',
-    label: 'Papan Iklan',
-    hasJenis: true,
-    jenisLabel: 'Jenis',
-    jenisInputType: 'select',
-    jenisOptions: ['Bersinar', 'Tidak Bersinar'],
-  },
-  {
-    key: 'permit_sementara_papan_tanda',
-    label: 'Permit Sementara Papan Tanda',
-    hasJenis: false,
-    jenisLabel: 'Jenis',
-    jenisInputType: 'text',
-    jenisOptions: [],
-  },
-  {
-    key: 'billiard_snooker',
-    label: 'Billiard/Snooker',
-    hasJenis: true,
-    jenisLabel: 'Bilangan Meja',
-    jenisInputType: 'number',
-    jenisOptions: [],
-  },
-  {
-    key: 'karaoke',
-    label: 'Karaoke',
-    hasJenis: true,
-    jenisLabel: 'Jenis',
-    jenisInputType: 'select',
-    jenisOptions: ['Terbuka', 'Tertutup'],
-  },
-  {
-    key: 'gym',
-    label: 'Gym',
-    hasJenis: false,
-    jenisLabel: 'Jenis',
-    jenisInputType: 'text',
-    jenisOptions: [],
-  },
-  {
-    key: 'kedai_serbaneka',
-    label: 'Kedai Serbaneka',
-    hasJenis: false,
-    jenisLabel: 'Jenis',
-    jenisInputType: 'text',
-    jenisOptions: [],
-  },
-  {
-    key: 'pusat_penjagaan',
-    label: 'Pusat Penjagaan Kesihatan, Kecantikan, dan Seumpamanya',
-    hasJenis: false,
-    jenisLabel: 'Jenis',
-    jenisInputType: 'text',
-    jenisOptions: [],
-  },
-] as const
-
-type AdditionalActivityKey = (typeof additionalActivityConfigs)[number]['key']
-
-const additionalActivityPricing: Record<
-  AdditionalActivityKey,
-  {
-    flatRate?: number
-    jenisRate?: Record<string, number>
-    perUnitRate?: number
-  }
-> = {
-  papan_iklan: {
-    jenisRate: {
-      Bersinar: 300,
-      'Tidak Bersinar': 200,
-    },
-  },
-  permit_sementara_papan_tanda: {
-    flatRate: 150,
-  },
-  billiard_snooker: {
-    perUnitRate: 120,
-  },
-  karaoke: {
-    jenisRate: {
-      Terbuka: 250,
-      Tertutup: 300,
-    },
-  },
-  gym: {
-    flatRate: 300,
-  },
-  kedai_serbaneka: {
-    flatRate: 180,
-  },
-  pusat_penjagaan: {
-    flatRate: 220,
-  },
+interface AdditionalActivityRateOption {
+  id: number
+  type_name: string
+  min_area: number | null
+  max_area: number | null
+  amount: number | null
 }
 
-function hasJenisColumn(activityKey: AdditionalActivityKey) {
-  return additionalActivityConfigs.find((config) => config.key === activityKey)?.hasJenis ?? false
+interface AdditionalActivityOption {
+  id: number
+  district_id: number
+  activity_name: string
+  rates: AdditionalActivityRateOption[]
 }
 
-function getActivityConfig(activityKey: AdditionalActivityKey) {
-  return additionalActivityConfigs.find((config) => config.key === activityKey)
+interface AdditionalActivityRow {
+  type_name: string
+  rate_id: number | null
 }
 
-function getActivityAmount(activityKey: AdditionalActivityKey, jenisValue?: string) {
-  const pricing = additionalActivityPricing[activityKey]
-  if (!pricing) return 0
+const additionalActivities = ref<AdditionalActivityOption[]>([])
+const additionalActivitiesLoading = ref(false)
+const additionalActivitiesMessage = ref('')
 
-  if (typeof pricing.perUnitRate === 'number') {
-    const quantity = Number((jenisValue ?? '').trim())
-    if (Number.isNaN(quantity) || quantity <= 0) return 0
-    return quantity * pricing.perUnitRate
+const activityById = computed(() => {
+  return new Map(additionalActivities.value.map((activity) => [activity.id, activity]))
+})
+
+const selectedAdditionalActivities = computed(() => {
+  return form.value.advertisment_info.selected_activity_ids
+    .map((activityId) => activityById.value.get(activityId))
+    .filter((activity): activity is AdditionalActivityOption => Boolean(activity))
+})
+
+function createEmptyActivityRow(): AdditionalActivityRow {
+  return {
+    type_name: '',
+    rate_id: null,
+  }
+}
+
+function getActivityRows(activityId: number): AdditionalActivityRow[] {
+  return form.value.advertisment_info.activity_rows[activityId] ?? []
+}
+
+function getJenisOptions(activity: AdditionalActivityOption): string[] {
+  return Array.from(new Set(activity.rates.map((rate) => rate.type_name).filter(Boolean)))
+}
+
+function getKeluasanOptions(activity: AdditionalActivityOption, row: AdditionalActivityRow): AdditionalActivityRateOption[] {
+  if (!row.type_name) {
+    return []
   }
 
-  if (pricing.jenisRate) {
-    return pricing.jenisRate[jenisValue ?? ''] ?? 0
+  return activity.rates.filter((rate) => rate.type_name === row.type_name)
+}
+
+function getRowRate(activity: AdditionalActivityOption, row: AdditionalActivityRow): AdditionalActivityRateOption | null {
+  if (!row.rate_id) {
+    return null
   }
 
-  return pricing.flatRate ?? 0
+  return activity.rates.find((rate) => rate.id === row.rate_id) ?? null
+}
+
+function getSelectedRowsForActivity(activity: AdditionalActivityOption) {
+  return getActivityRows(activity.id)
+    .map((row) => ({
+      row,
+      rate: getRowRate(activity, row),
+    }))
+    .filter((item): item is { row: AdditionalActivityRow; rate: AdditionalActivityRateOption } => Boolean(item.rate))
+}
+
+function onRowJenisChange(activity: AdditionalActivityOption, row: AdditionalActivityRow) {
+  const selectedRate = getRowRate(activity, row)
+
+  if (selectedRate && selectedRate.type_name === row.type_name) {
+    return
+  }
+
+  row.rate_id = null
+}
+
+function addActivityRow(activityId: number) {
+  const rows = getActivityRows(activityId)
+
+  rows.push(createEmptyActivityRow())
+  form.value.advertisment_info.activity_rows[activityId] = rows
+}
+
+function removeActivityRow(activityId: number, index: number) {
+  const rows = getActivityRows(activityId)
+
+  if (rows.length <= 1) {
+    return
+  }
+
+  rows.splice(index, 1)
+  form.value.advertisment_info.activity_rows[activityId] = rows
+}
+
+function formatAreaRange(minArea: number | null, maxArea: number | null) {
+  if (minArea === null && maxArea === null) {
+    return '-'
+  }
+
+  if (maxArea === null) {
+    return `${formatAmount(minArea ?? 0)} ke atas`
+  }
+
+  return `${formatAmount(minArea ?? 0)} - ${formatAmount(maxArea)}`
 }
 
 function formatAmount(value: number) {
@@ -260,13 +259,12 @@ function formatAmount(value: number) {
 }
 
 const additionalActivitiesTotalAmount = computed(() => {
-  return form.value.advertisment_info.selected_activities.reduce((total, activityKey) => {
-    const rows = form.value.advertisment_info.activity_tables[activityKey] ?? []
-    const activityTotal = rows.reduce((rowTotal, row) => {
-      return rowTotal + getActivityAmount(activityKey, row.jenis)
+  return selectedAdditionalActivities.value.reduce((total, activity) => {
+    const rowsTotal = getSelectedRowsForActivity(activity).reduce((rowTotal, item) => {
+      return rowTotal + Number(item.rate.amount ?? 0)
     }, 0)
 
-    return total + activityTotal
+    return total + rowsTotal
   }, 0)
 })
 
@@ -346,16 +344,8 @@ const form = ref({
   },
   advertisment_info: {
     address: '',
-    selected_activities: [] as AdditionalActivityKey[],
-    activity_tables: {
-      papan_iklan: [{ jenis: '', keluasan: '' }],
-      permit_sementara_papan_tanda: [{ jenis: '', keluasan: '' }],
-      billiard_snooker: [{ jenis: '', keluasan: '' }],
-      karaoke: [{ jenis: '', keluasan: '' }],
-      gym: [{ jenis: '', keluasan: '' }],
-      kedai_serbaneka: [{ jenis: '', keluasan: '' }],
-      pusat_penjagaan: [{ jenis: '', keluasan: '' }],
-    },
+    selected_activity_ids: [] as number[],
+    activity_rows: {} as Record<number, AdditionalActivityRow[]>,
   },
   declaration: {
     agree: false,
@@ -484,6 +474,22 @@ watch(() => form.value.company_info.company_state_hq, (state) => {
   }
 })
 
+watch(
+  () => form.value.district_id,
+  (districtId) => {
+    void fetchAdditionalActivitiesByDistrict(districtId)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => form.value.advertisment_info.selected_activity_ids,
+  () => {
+    syncSelectedAdditionalActivitiesWithLoadedOptions()
+  },
+  { deep: true },
+)
+
 let applicantAutosaveTimeout: ReturnType<typeof setTimeout> | null = null
 let applicantAutosaveController: AbortController | null = null
 
@@ -597,6 +603,104 @@ function clearFormDraft() {
     localStorage.removeItem(currentUserDraftKey.value)
   } catch (error) {
     console.error('Failed to clear license application draft', error)
+  }
+}
+
+function syncSelectedAdditionalActivitiesWithLoadedOptions() {
+  const validActivityIds = new Set(additionalActivities.value.map((activity) => activity.id))
+
+  const filteredActivityIds = form.value.advertisment_info.selected_activity_ids
+    .filter((activityId) => validActivityIds.has(activityId))
+
+  if (filteredActivityIds.length !== form.value.advertisment_info.selected_activity_ids.length) {
+    form.value.advertisment_info.selected_activity_ids = filteredActivityIds
+  }
+
+  const sanitizedRows: Record<number, AdditionalActivityRow[]> = {}
+
+  for (const activityId of filteredActivityIds) {
+    const activity = activityById.value.get(activityId)
+
+    if (!activity) {
+      continue
+    }
+
+    const validRateIds = new Set(activity.rates.map((rate) => rate.id))
+    const existingRows = form.value.advertisment_info.activity_rows[activityId] ?? []
+
+    const normalizedRows = existingRows.map((row) => {
+      const nextRow: AdditionalActivityRow = {
+        type_name: String(row?.type_name ?? ''),
+        rate_id: typeof row?.rate_id === 'number' ? row.rate_id : null,
+      }
+
+      if (nextRow.rate_id !== null && !validRateIds.has(nextRow.rate_id)) {
+        nextRow.rate_id = null
+      }
+
+      if (nextRow.rate_id !== null) {
+        const selectedRate = activity.rates.find((rate) => rate.id === nextRow.rate_id) ?? null
+
+        if (!selectedRate) {
+          nextRow.rate_id = null
+        } else if (nextRow.type_name && nextRow.type_name !== selectedRate.type_name) {
+          nextRow.rate_id = null
+        } else if (!nextRow.type_name) {
+          nextRow.type_name = selectedRate.type_name
+        }
+      }
+
+      return nextRow
+    })
+
+    sanitizedRows[activityId] = normalizedRows.length > 0
+      ? normalizedRows
+      : [createEmptyActivityRow()]
+  }
+
+  form.value.advertisment_info.activity_rows = sanitizedRows
+}
+
+async function fetchAdditionalActivitiesByDistrict(districtId: number | null) {
+  additionalActivitiesMessage.value = ''
+
+  if (!districtId) {
+    additionalActivities.value = []
+    form.value.advertisment_info.selected_activity_ids = []
+    form.value.advertisment_info.activity_rows = {}
+    return
+  }
+
+  additionalActivitiesLoading.value = true
+
+  try {
+    const response = await fetch(`/license/additional-activities?district_id=${districtId}`, {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+
+    const payload = await response.json()
+
+    additionalActivities.value = Array.isArray(payload?.activities)
+      ? payload.activities
+      : []
+
+    syncSelectedAdditionalActivitiesWithLoadedOptions()
+  } catch (error) {
+    additionalActivities.value = []
+    form.value.advertisment_info.selected_activity_ids = []
+    form.value.advertisment_info.activity_rows = {}
+    additionalActivitiesMessage.value = 'Senarai aktiviti tambahan tidak dapat dimuatkan sekarang.'
+    console.error('Failed to load additional activities by district', error)
+  } finally {
+    additionalActivitiesLoading.value = false
   }
 }
 
@@ -897,18 +1001,14 @@ function submitForm() {
 
   const companyInfo = form.value.company_info
 
-  const advertisementInfoPayload = form.value.advertisment_info.selected_activities
-    .flatMap((activityKey) => {
-      const rows = form.value.advertisment_info.activity_tables[activityKey] ?? []
-      const withJenis = hasJenisColumn(activityKey)
-
-      return rows.map((row) => ({
-        activity_type: activityKey,
-        jenis: withJenis ? row.jenis : '',
-        keluasan_mps: row.keluasan,
+  const advertisementInfoPayload = selectedAdditionalActivities.value
+    .flatMap((activity) => {
+      return getSelectedRowsForActivity(activity).map((item) => ({
+        activity_type: activity.activity_name,
+        jenis: item.rate.type_name,
+        keluasan_mps: formatAreaRange(item.rate.min_area, item.rate.max_area),
       }))
     })
-    .filter((row) => row.keluasan_mps || row.jenis)
 
   const payload = {
     district_id: form.value.district_id,
@@ -952,18 +1052,6 @@ function submitForm() {
       }
     },
   })
-}
-
-function addActivityRow(activityKey: AdditionalActivityKey) {
-  form.value.advertisment_info.activity_tables[activityKey].push({ jenis: '', keluasan: '' })
-}
-
-function removeActivityRow(activityKey: AdditionalActivityKey, index: number) {
-  const rows = form.value.advertisment_info.activity_tables[activityKey]
-
-  if (rows.length > 1) {
-    rows.splice(index, 1)
-  }
 }
 
 const licenseTypeOptions = [
@@ -1229,7 +1317,7 @@ function formatPremisesLocation(value: string | null | undefined) {
 }
 
 function getPbtCardClass(index: number) {
-  const total = categoryCards.length
+  const total = categoryCards.value.length
   const isSingleCardLastRow = total % 3 === 1 && index === total - 1
 
   return isSingleCardLastRow ? 'lg:col-start-2' : ''
@@ -1280,11 +1368,11 @@ function getPbtCardClass(index: number) {
               class="flex items-center gap-4 rounded-2xl border p-4 shadow-sm cursor-pointer transition"
               :class="[
                 getPbtCardClass(cardIndex),
-                form.district_id === getDistrictIdByName(card.name)
+                form.district_id === card.id
                   ? 'border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30'
                   : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/60 hover:border-blue-300 dark:hover:border-blue-500',
               ]"
-              @click="form.district_id = getDistrictIdByName(card.name)"
+              @click="form.district_id = card.id"
             >
               <img :src="card.logo" :alt="card.name" class="h-12 w-12 object-contain" />
               <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ card.name }}</div>
@@ -1765,35 +1853,51 @@ function getPbtCardClass(index: number) {
             <div class="space-y-4">
               <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Aktiviti Tambahan</h2>
 
+              <div v-if="!form.district_id" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+                Sila pilih PBT pada Langkah 1 untuk melihat senarai aktiviti tambahan.
+              </div>
+
+              <div v-else-if="additionalActivitiesLoading" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                Memuatkan senarai aktiviti tambahan...
+              </div>
+
+              <div v-else-if="additionalActivitiesMessage" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+                {{ additionalActivitiesMessage }}
+              </div>
+
+              <div v-else-if="additionalActivities.length === 0" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                Tiada aktiviti tambahan ditetapkan untuk PBT yang dipilih.
+              </div>
+
               <div class="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
                 <label
-                  v-for="activity in additionalActivityConfigs"
-                  :key="activity.key"
+                  v-for="activity in additionalActivities"
+                  :key="activity.id"
                   class="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 >
                   <input
-                    v-model="form.advertisment_info.selected_activities"
+                    v-model="form.advertisment_info.selected_activity_ids"
                     type="checkbox"
-                    :value="activity.key"
+                    :value="activity.id"
                     class="h-4 w-4"
                   />
-                  <span>{{ activity.label }}</span>
+                  <span>{{ activity.activity_name }}</span>
                 </label>
               </div>
 
               <div
-                v-for="activity in additionalActivityConfigs.filter((item) => form.advertisment_info.selected_activities.includes(item.key))"
-                :key="`table-${activity.key}`"
+                v-for="activity in selectedAdditionalActivities"
+                :key="`table-${activity.id}`"
                 class="overflow-auto rounded-xl border border-slate-200 dark:border-slate-700"
               >
                 <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900">
-                  <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ activity.label }}</h3>
+                  <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ activity.activity_name }}</h3>
                   <button
                     type="button"
-                    @click="addActivityRow(activity.key)"
-                    class="rounded-xl bg-green-600 px-3 py-1 text-sm text-white dark:bg-green-500"
+                    class="rounded-xl bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
+                    @click="addActivityRow(activity.id)"
                   >
-                    Tambah
+                    + Tambah
                   </button>
                 </div>
 
@@ -1801,7 +1905,7 @@ function getPbtCardClass(index: number) {
                   <thead>
                     <tr class="bg-gray-100 dark:bg-slate-800">
                       <th class="border px-2 py-1 text-center">No</th>
-                      <th v-if="activity.hasJenis" class="border px-2 py-1 text-left">{{ activity.jenisLabel }}</th>
+                      <th class="border px-2 py-1 text-left">Jenis</th>
                       <th class="border px-2 py-1 text-left">Keluasan (MPS)</th>
                       <th class="border px-2 py-1 text-right">Amaun (RM)</th>
                       <th class="border px-2 py-1 text-center">Tindakan</th>
@@ -1809,63 +1913,61 @@ function getPbtCardClass(index: number) {
                   </thead>
                   <tbody>
                     <tr
-                      v-for="(row, rIndex) in form.advertisment_info.activity_tables[activity.key]"
-                      :key="`${activity.key}-row-${rIndex}`"
+                      v-for="(row, rowIndex) in getActivityRows(activity.id)"
+                      :key="`${activity.id}-row-${rowIndex}`"
                     >
-                      <td class="border px-2 py-1 text-center">{{ rIndex + 1 }}</td>
-                      <td v-if="activity.hasJenis" class="border px-2 py-1">
-                        <select
-                          v-if="activity.jenisInputType === 'select'"
-                          v-model="row.jenis"
-                          class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                        >
-                          <option value="">-- Pilih --</option>
-                          <option
-                            v-for="option in activity.jenisOptions"
-                            :key="`${activity.key}-jenis-${option}`"
-                            :value="option"
-                          >
-                            {{ option }}
-                          </option>
-                        </select>
-                        <input
-                          v-else-if="activity.jenisInputType === 'number'"
-                          v-model="row.jenis"
-                          inputmode="numeric"
-                          pattern="[0-9]*"
-                          @input="row.jenis = enforceNumericValue($event)"
-                          class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                          placeholder="Masukkan bilangan meja"
-                        />
-                        <input
-                          v-else
-                          v-model="row.jenis"
-                          class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                          placeholder="Masukkan jenis"
-                        />
+                      <td class="border px-2 py-1 text-center">
+                        {{ rowIndex + 1 }}
                       </td>
                       <td class="border px-2 py-1">
-                        <input
-                          v-model="row.keluasan"
-                          inputmode="numeric"
-                          pattern="[0-9]*"
-                          @input="row.keluasan = enforceNumericValue($event)"
+                        <select
+                          v-model="row.type_name"
                           class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                          placeholder="Masukkan keluasan"
-                        />
+                          @change="onRowJenisChange(activity, row)"
+                        >
+                          <option value="">-- Pilih Jenis --</option>
+                          <option
+                            v-for="jenis in getJenisOptions(activity)"
+                            :key="`${activity.id}-jenis-${jenis}`"
+                            :value="jenis"
+                          >
+                            {{ jenis }}
+                          </option>
+                        </select>
+                      </td>
+                      <td class="border px-2 py-1">
+                        <select
+                          v-model="row.rate_id"
+                          class="w-full rounded-xl border border-gray-300 px-2 py-1 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                          :disabled="!row.type_name"
+                        >
+                          <option :value="null">-- Pilih Keluasan --</option>
+                          <option
+                            v-for="rateOption in getKeluasanOptions(activity, row)"
+                            :key="`${activity.id}-rate-option-${rateOption.id}`"
+                            :value="rateOption.id"
+                          >
+                            {{ formatAreaRange(rateOption.min_area, rateOption.max_area) }}
+                          </option>
+                        </select>
                       </td>
                       <td class="border px-2 py-1 text-right font-semibold tabular-nums">
-                        {{ formatAmount(getActivityAmount(activity.key, row.jenis)) }}
+                        {{ formatAmount(getRowRate(activity, row)?.amount ?? 0) }}
                       </td>
                       <td class="border px-2 py-1 text-center">
                         <button
                           type="button"
-                          @click="removeActivityRow(activity.key, rIndex)"
-                          class="rounded-xl bg-red-600 px-2 py-1 text-white dark:bg-red-500"
-                          :disabled="form.advertisment_info.activity_tables[activity.key].length <= 1"
+                          class="rounded-xl bg-red-600 px-2 py-1 text-white hover:bg-red-700 disabled:opacity-50 dark:bg-red-500 dark:hover:bg-red-600"
+                          :disabled="getActivityRows(activity.id).length <= 1"
+                          @click="removeActivityRow(activity.id, rowIndex)"
                         >
                           Buang
                         </button>
+                      </td>
+                    </tr>
+                    <tr v-if="activity.rates.length === 0">
+                      <td colspan="5" class="border px-2 py-3 text-center text-sm text-slate-600 dark:text-slate-300">
+                        Tiada kadar ditetapkan untuk aktiviti ini.
                       </td>
                     </tr>
                   </tbody>
@@ -2302,36 +2404,36 @@ function getPbtCardClass(index: number) {
 
               <section>
                 <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{{ stepTitles[3] }}</h3>
-                <div v-if="form.advertisment_info.selected_activities.length === 0" class="text-sm text-slate-600 dark:text-slate-300">
+                <div v-if="additionalActivitiesTotalAmount <= 0" class="text-sm text-slate-600 dark:text-slate-300">
                   Tiada aktiviti tambahan dipilih.
                 </div>
                 <div v-else class="space-y-3">
                   <div
-                    v-for="activity in additionalActivityConfigs.filter((item) => form.advertisment_info.selected_activities.includes(item.key))"
-                    :key="`summary-${activity.key}`"
+                    v-for="activity in selectedAdditionalActivities"
+                    :key="`summary-${activity.id}`"
                     class="rounded-xl border border-slate-200 p-3 dark:border-slate-700"
                   >
-                    <div class="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-400">{{ activity.label }}</div>
+                    <div class="mb-2 text-xs font-semibold text-slate-600 dark:text-slate-400">{{ activity.activity_name }}</div>
                     <div
-                      v-for="(row, idx) in form.advertisment_info.activity_tables[activity.key]"
-                      :key="`summary-${activity.key}-${idx}`"
+                      v-for="(item, idx) in getSelectedRowsForActivity(activity)"
+                      :key="`summary-${activity.id}-${idx}-${item.rate.id}`"
                       class="grid grid-cols-1 gap-3 border-t border-slate-200 py-2 first:border-t-0 dark:border-slate-700 md:grid-cols-4"
                     >
                       <div>
                         <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">No</div>
                         <div class="text-sm text-slate-900 dark:text-slate-100">{{ idx + 1 }}</div>
                       </div>
-                      <div v-if="activity.hasJenis">
-                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">{{ getActivityConfig(activity.key)?.jenisLabel ?? 'Jenis' }}</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.jenis || '-' }}</div>
+                      <div>
+                        <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Jenis</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ item.rate.type_name || '-' }}</div>
                       </div>
                       <div>
                         <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Keluasan (MPS)</div>
-                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ row.keluasan || '-' }}</div>
+                        <div class="text-sm text-slate-900 dark:text-slate-100">{{ formatAreaRange(item.rate.min_area, item.rate.max_area) }}</div>
                       </div>
                       <div>
                         <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Amaun (RM)</div>
-                        <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ formatAmount(getActivityAmount(activity.key, row.jenis)) }}</div>
+                        <div class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ formatAmount(item.rate.amount ?? 0) }}</div>
                       </div>
                     </div>
                   </div>

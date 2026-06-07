@@ -37,21 +37,31 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const submit = () => {
     if (isEdit.value && editId.value) {
-        form.put(`/admin/license-additional-activities/rates/${editId.value}`, {
-            preserveScroll: true,
-            onSuccess: () => {
-                showModal.value = false;
-                form.reset();
-            },
-        });
+        form
+            .transform((data) => ({
+                ...data,
+                max_area: data.max_area === '' ? null : data.max_area,
+            }))
+            .put(`/admin/license-additional-activities/rates/${editId.value}`, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    showModal.value = false;
+                    form.reset();
+                },
+            });
     } else {
-        form.post(`/admin/license-additional-activities/${props.activity.id}/rates`, {
-            preserveScroll: true,
-            onSuccess: () => {
-                showModal.value = false;
-                form.reset();
-            },
-        });
+        form
+            .transform((data) => ({
+                ...data,
+                max_area: data.max_area === '' ? null : data.max_area,
+            }))
+            .post(`/admin/license-additional-activities/${props.activity.id}/rates`, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    showModal.value = false;
+                    form.reset();
+                },
+            });
     }
 };
 

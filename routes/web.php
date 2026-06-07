@@ -337,6 +337,10 @@ Route::patch('/license/applicant-info', [LicenseApplicationController::class, 'u
     ->middleware(['auth'])
     ->name('license.applicant-info.update');
 
+Route::get('/license/additional-activities', [LicenseApplicationController::class, 'additionalActivities'])
+    ->middleware(['auth'])
+    ->name('license.additional-activities');
+
 Route::get('/license/process-fee/start', [LicenseApplicationController::class, 'startProcessFeePayment'])
     ->middleware(['auth'])
     ->name('license.process-fee.start');
