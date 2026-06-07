@@ -337,6 +337,10 @@ Route::patch('/license/applicant-info', [LicenseApplicationController::class, 'u
     ->middleware(['auth'])
     ->name('license.applicant-info.update');
 
+Route::get('/license/additional-activities', [LicenseApplicationController::class, 'additionalActivities'])
+    ->middleware(['auth'])
+    ->name('license.additional-activities');
+
 Route::get('/license/process-fee/start', [LicenseApplicationController::class, 'startProcessFeePayment'])
     ->middleware(['auth'])
     ->name('license.process-fee.start');
@@ -419,8 +423,32 @@ Route::get('/admin/license-additional-activities', [LicenseApplicationController
     ->middleware(['auth'])
     ->name('admin.license.additional-activities');
 
+Route::post('/admin/license-additional-activities', [LicenseApplicationController::class, 'storeAdditionalActivity'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.store');
+
+Route::patch('/admin/license-additional-activities/{activity}', [LicenseApplicationController::class, 'updateAdditionalActivity'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.update');
+
+Route::delete('/admin/license-additional-activities/{activity}', [LicenseApplicationController::class, 'deleteAdditionalActivity'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.destroy');
+
 Route::get('/admin/license-additional-activities/{activity}', [LicenseApplicationController::class, 'additionalActivityShow'])
     ->middleware(['auth'])
     ->name('admin.license.additional-activities.show');
+
+Route::post('/admin/license-additional-activities/{activity}/rates', [LicenseApplicationController::class, 'storeAdditionalActivityRate'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.rates.store');
     
+Route::put('/admin/license-additional-activities/rates/{rate}', [LicenseApplicationController::class, 'updateAdditionalActivityRate'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.rates.update');
+
+Route::delete('/admin/license-additional-activities/rates/{rate}', [LicenseApplicationController::class, 'deleteAdditionalActivityRate'])
+    ->middleware(['auth'])
+    ->name('admin.license.additional-activities.rates.destroy');
+
 require __DIR__.'/settings.php';

@@ -21,4 +21,9 @@ class District extends Model
     {
         return $this->hasMany(LicenseApplication::class);
     }
+
+    public function additionalActivities()
+    {
+        return $this->hasMany(AdditionalActivity::class);
+    }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 
@@ -11,6 +11,10 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const showAddModal = ref(false);
 const activityName = ref('');
+
+const props = defineProps<{
+    activities?: { id: number; activity_name: string }[];
+}>();
 
 function openAddModal() {
     showAddModal.value = true;
@@ -26,21 +30,69 @@ function addActivity() {
         return;
     }
 
-    console.log('New Activity:', activityName.value);
-    closeAddModal();
+    router.post('/admin/license-additional-activities', {
+        activity_name: activityName.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeAddModal();
+            router.reload();
+        },
+    });
 }
 
-// Temporary dummy data
-const activities = [
-    {
-        id: 1,
-        activity_name: 'Kolam Renang',
-    },
-    {
-        id: 2,
-        activity_name: 'Spa',
-    },
-];
+const activities = ref(props.activities ?? []);
+
+watch(() => props.activities, (v) => {
+    activities.value = v ?? [];
+});
+
+const showEditModal = ref(false);
+const editActivityName = ref('');
+const editingActivityId = ref<number | null>(null);
+
+function openEditModal(activity: { id: number; activity_name: string }) {
+    editingActivityId.value = activity.id;
+    editActivityName.value = activity.activity_name ?? '';
+    showEditModal.value = true;
+}
+
+function closeEditModal() {
+    showEditModal.value = false;
+    editActivityName.value = '';
+    editingActivityId.value = null;
+}
+
+function submitEdit() {
+    if (!editingActivityId.value) return;
+
+    router.post(`/admin/license-additional-activities/${editingActivityId.value}`, {
+        _method: 'PATCH',
+        activity_name: editActivityName.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            const idx = activities.value.findIndex((a: any) => a.id === editingActivityId.value);
+            if (idx !== -1) {
+                activities.value[idx].activity_name = editActivityName.value;
+            }
+            closeEditModal();
+        },
+    });
+}
+
+function deleteActivity(activity: { id: number }) {
+    if (!confirm('Padam aktiviti ini?')) return;
+
+    router.post(`/admin/license-additional-activities/${activity.id}`, {
+        _method: 'DELETE',
+    }, {
+        preserveScroll: true,
+        onSuccess: () => {
+            activities.value = activities.value.filter((a: any) => a.id !== activity.id);
+        },
+    });
+}
 </script>
 
 <template>
@@ -70,7 +122,7 @@ const activities = [
                         class="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
                         @click="openAddModal"
                     >
-                        Tambah Aktiviti
+                        + Tambah Aktiviti
                     </button>
                 </div>
 
@@ -122,16 +174,17 @@ const activities = [
                                     class="border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
                                 >
                                     <div class="flex gap-2">
-                                        <button
-                                            type="button"
+                                        <Link
+                                            :href="`/admin/license-additional-activities/${activity.id}`"
                                             class="px-3 py-1 rounded-lg bg-gray-500 text-white text-xs font-semibold hover:bg-gray-600"
                                         >
                                             Lihat
-                                        </button>
+                                        </Link>
 
                                         <button
                                             type="button"
                                             class="px-3 py-1 rounded-lg bg-yellow-500 text-white text-xs font-semibold hover:bg-yellow-600"
+                                            @click="openEditModal(activity)"
                                         >
                                             Kemaskini
                                         </button>
@@ -139,6 +192,7 @@ const activities = [
                                         <button
                                             type="button"
                                             class="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
+                                            @click="deleteActivity(activity)"
                                         >
                                             Padam
                                         </button>
@@ -160,6 +214,56 @@ const activities = [
 
             </div>
         </div>
+    
+                <div
+                v-if="showEditModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+                @click.self="closeEditModal"
+            >
+                <div
+                    class="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 p-6 shadow-xl"
+                >
+                    <h3
+                        class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+                    >
+                        Kemaskini Aktiviti
+                    </h3>
+
+                    <div class="mt-4">
+                        <label
+                            class="mb-2 block text-sm font-medium text-slate-900 dark:text-slate-100"
+                        >
+                            Nama Aktiviti
+                        </label>
+
+                        <input
+                            v-model="editActivityName"
+                            type="text"
+                            placeholder="Masukkan nama aktiviti"
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        />
+                    </div>
+
+                    <div class="mt-6 flex justify-end gap-2">
+                        <button
+                            type="button"
+                            class="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                            @click="closeEditModal"
+                        >
+                            Batal
+                        </button>
+
+                        <button
+                            type="button"
+                            class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            :disabled="!editActivityName.trim()"
+                            @click="submitEdit()"
+                        >
+                            Simpan
+                        </button>
+                    </div>
+                </div>
+            </div>
     </AppLayout>
 
     <div

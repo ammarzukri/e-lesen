@@ -19,6 +19,8 @@ use App\Models\LicenseApplication;
 use App\Models\LicenseDocument;
 use App\Models\LicenseProcessFeePayment;
 use App\Models\LicenseRenewal;
+use App\Models\AdditionalActivity;
+use App\Models\AdditionalActivityRate;
 
 class LicenseApplicationController extends Controller
 {
@@ -1460,13 +1462,188 @@ class LicenseApplicationController extends Controller
         return 'D';
     }
 
+    public function additionalActivities(Request $request)
+    {
+        $this->ensureNotStaff();
+
+        $districtId = $request->integer('district_id');
+
+        if (! $districtId) {
+            return response()->json([
+                'activities' => [],
+            ]);
+        }
+
+        $activities = AdditionalActivity::query()
+            ->where('district_id', $districtId)
+            ->with([
+                'rates' => function ($query) {
+                    $query
+                        ->orderBy('min_area')
+                        ->orderBy('id');
+                },
+            ])
+            ->orderBy('activity_name')
+            ->get(['id', 'district_id', 'activity_name'])
+            ->map(function (AdditionalActivity $activity) {
+                return [
+                    'id' => $activity->id,
+                    'district_id' => $activity->district_id,
+                    'activity_name' => $activity->activity_name,
+                    'rates' => $activity->rates->map(function (AdditionalActivityRate $rate) {
+                        return [
+                            'id' => $rate->id,
+                            'type_name' => $rate->type_name,
+                            'min_area' => $rate->min_area !== null ? (float) $rate->min_area : null,
+                            'max_area' => $rate->max_area !== null ? (float) $rate->max_area : null,
+                            'amount' => $rate->amount !== null ? (float) $rate->amount : null,
+                        ];
+                    })->values(),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'activities' => $activities,
+        ]);
+    }
+
     public function additionalActivityIndex()
     {
-        return Inertia::render('e-lesen/admin/AdditionalActivity');
+        $query = \App\Models\AdditionalActivity::query()->withCount('rates')->orderBy('activity_name');
+
+        if ($this->isPbtAdmin()) {
+            $districtId = $this->pbtAdminDistrictId();
+            $query->where('district_id', $districtId);
+        }
+
+        $activities = $query->get(['id', 'district_id', 'activity_name']);
+
+        return Inertia::render('e-lesen/admin/AdditionalActivity', [
+            'activities' => $activities,
+        ]);
     }
 
     public function additionalActivityShow()
     {
-        return Inertia::render('e-lesen/admin/AdditionalActivityShow');
+        $activityId = request()->route('activity');
+
+        $activity = \App\Models\AdditionalActivity::with(['rates'])->findOrFail($activityId);
+
+        if ($this->isPbtAdmin() && (int) $activity->district_id !== (int) $this->pbtAdminDistrictId()) {
+            abort(403);
+        }
+
+        return Inertia::render('e-lesen/admin/AdditionalActivityShow', [
+            'activity' => $activity,
+        ]);
+    }
+
+    public function storeAdditionalActivity(Request $request)
+    {
+        $this->ensurePbtAdmin();
+
+        $validated = $request->validate([
+            'activity_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $districtId = $this->pbtAdminDistrictId() ?? auth()->user()?->district_id;
+
+        $activity = \App\Models\AdditionalActivity::create([
+            'district_id' => $districtId,
+            'activity_name' => $validated['activity_name'],
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json($activity);
+        }
+
+        return redirect()->route('admin.license.additional-activities');
+    }
+
+    public function updateAdditionalActivity(Request $request, \App\Models\AdditionalActivity $activity)
+    {
+        $this->ensurePbtAdmin();
+
+        if ($this->isPbtAdmin() && (int) $activity->district_id !== (int) $this->pbtAdminDistrictId()) {
+            abort(403);
+        }
+
+        $validated = $request->validate([
+            'activity_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $activity->update([
+            'activity_name' => $validated['activity_name'],
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json($activity);
+        }
+
+        return redirect()->route('admin.license.additional-activities');
+    }
+
+    public function deleteAdditionalActivity(Request $request, \App\Models\AdditionalActivity $activity)
+    {
+        $this->ensurePbtAdmin();
+
+        if ($this->isPbtAdmin() && (int) $activity->district_id !== (int) $this->pbtAdminDistrictId()) {
+            abort(403);
+        }
+
+        $activity->delete();
+
+        if ($request->wantsJson()) {
+            return response()->json(['deleted' => true]);
+        }
+
+        return redirect()->route('admin.license.additional-activities');
+    }
+
+    public function storeAdditionalActivityRate(Request $request, \App\Models\AdditionalActivity $activity)
+    {
+        $validated = $request->validate([
+            'type_name' => ['required', 'string', 'max:255'],
+            'min_area' => ['required', 'numeric'],
+            'max_area' => ['nullable', 'numeric'],
+            'amount' => ['required', 'numeric'],
+        ]);
+
+        AdditionalActivityRate::create([
+            'additional_activity_id' => $activity->id,
+            'type_name' => $validated['type_name'],
+            'min_area' => $validated['min_area'],
+            'max_area' => $validated['max_area'] ?? null,
+            'amount' => $validated['amount'],
+        ]);
+
+        return back()->with('success', 'Kadar aktiviti berjaya ditambah.');
+    }
+
+    public function updateAdditionalActivityRate(Request $request, AdditionalActivityRate $rate)
+    {
+        $validated = $request->validate([
+            'type_name' => ['required'],
+            'min_area' => ['required', 'numeric'],
+            'max_area' => ['nullable', 'numeric'],
+            'amount' => ['required', 'numeric'],
+        ]);
+
+        $rate->update([
+            'type_name' => $validated['type_name'],
+            'min_area' => $validated['min_area'],
+            'max_area' => $validated['max_area'] ?? null,
+            'amount' => $validated['amount'],
+        ]);
+
+        return back()->with('success', 'Kadar dikemaskini.');
+    }
+
+    public function deleteAdditionalActivityRate(AdditionalActivityRate $rate)
+    {
+        $rate->delete();
+
+        return back()->with('success', 'Kadar dibuang.');
     }
 }
