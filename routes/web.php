@@ -399,6 +399,10 @@ Route::post('/admin/license-applications/{application}/reject', [LicenseApplicat
     ->middleware(['auth'])
     ->name('admin.license.reject');
 
+Route::get('/admin/license-applications/{application}/pdf', [LicenseApplicationController::class, 'generatePdf'])
+    ->middleware(['auth'])
+    ->name('admin.license.pdf');
+
 Route::get('/admin/license-documents/{document}', [LicenseApplicationController::class, 'adminDocument'])
     ->middleware(['auth'])
     ->name('admin.license.document');

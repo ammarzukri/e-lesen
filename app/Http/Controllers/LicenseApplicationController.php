@@ -21,6 +21,7 @@ use App\Models\LicenseProcessFeePayment;
 use App\Models\LicenseRenewal;
 use App\Models\AdditionalActivity;
 use App\Models\AdditionalActivityRate;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class LicenseApplicationController extends Controller
 {
@@ -1153,7 +1154,15 @@ class LicenseApplicationController extends Controller
             'applicant_info' => ['required', 'array'],
             'company_info' => ['required', 'array'],
             'license_type' => ['nullable', 'array'],
-            'advertisement_info' => ['nullable', 'array'],
+            'additional_info' => ['nullable', 'array'],
+            'additional_info.*.additional_activity_id' => ['nullable', 'integer', 'exists:additional_activities,id'],
+            'additional_info.*.additional_activity_rate_id' => ['nullable', 'integer', 'exists:additional_activity_rates,id'],
+            'additional_info.*.activity_name' => ['nullable', 'string', 'max:255'],
+            'additional_info.*.activity_type' => ['nullable', 'string', 'max:255'],
+            'additional_info.*.jenis' => ['nullable', 'string', 'max:255'],
+            'additional_info.*.type_name' => ['nullable', 'string', 'max:255'],
+            'additional_info.*.keluasan_mps' => ['nullable', 'string', 'max:255'],
+            'additional_info.*.amount' => ['nullable', 'numeric'],
             'documents' => ['nullable', 'array'],
             'documents.*.document_type' => ['nullable', 'string'],
             'documents.*.file' => ['nullable', 'file', 'max:10240'],
@@ -1262,15 +1271,54 @@ class LicenseApplicationController extends Controller
                 'company_phone_hq' => $company['company_phone_hq'] ?? null,
             ]);
 
-            $additionalInfos = $request->input('advertisement_info', []);
+            $additionalInfos = $request->input('additional_info', []);
             foreach ($additionalInfos as $row) {
-                if (!array_filter($row ?? [])) {
+                $hasRelevantData = array_filter([
+                    $row['additional_activity_id'] ?? null,
+                    $row['additional_activity_rate_id'] ?? null,
+                    $row['activity_name'] ?? null,
+                    $row['activity_type'] ?? null,
+                    $row['jenis'] ?? null,
+                    $row['type_name'] ?? null,
+                    $row['keluasan_mps'] ?? null,
+                    $row['amount'] ?? null,
+                ], static fn ($value) => $value !== null && $value !== '');
+
+                if ($hasRelevantData === []) {
                     continue;
                 }
+
+                $activityId = isset($row['additional_activity_id']) ? (int) $row['additional_activity_id'] : null;
+                $rateId = isset($row['additional_activity_rate_id']) ? (int) $row['additional_activity_rate_id'] : null;
+                $activity = $activityId ? AdditionalActivity::query()->find($activityId) : null;
+                $rate = $rateId ? AdditionalActivityRate::query()->find($rateId) : null;
+
+                $activityName = trim((string) ($row['activity_name'] ?? $row['activity_type'] ?? $activity?->activity_name ?? ''));
+                $typeName = trim((string) ($row['type_name'] ?? $row['jenis'] ?? $rate?->type_name ?? ''));
+                $keluasanMps = trim((string) ($row['keluasan_mps'] ?? ''));
+
+                if ($keluasanMps === '' && $rate) {
+                    $minArea = $rate->min_area !== null ? (float) $rate->min_area : null;
+                    $maxArea = $rate->max_area !== null ? (float) $rate->max_area : null;
+
+                    if ($minArea === null && $maxArea === null) {
+                        $keluasanMps = '-';
+                    } elseif ($maxArea === null) {
+                        $keluasanMps = number_format($minArea ?? 0, 2, '.', '').' ke atas';
+                    } else {
+                        $keluasanMps = number_format($minArea ?? 0, 2, '.', '').' - '.number_format($maxArea, 2, '.', '');
+                    }
+                }
+
                 $licenseApplication->additionalInfos()->create([
-                    'activity_type' => $row['activity_type'] ?? $row['type'] ?? null,
-                    'jenis' => $row['jenis'] ?? $row['structure'] ?? null,
-                    'keluasan_mps' => $row['keluasan_mps'] ?? $row['length'] ?? null,
+                    'additional_activity_id' => $activity?->id ?? $activityId,
+                    'additional_activity_rate_id' => $rate?->id ?? $rateId,
+                    'activity_type' => $activityName !== '' ? $activityName : null,
+                    'jenis' => $typeName !== '' ? $typeName : null,
+                    'activity_name' => $activityName !== '' ? $activityName : null,
+                    'type_name' => $typeName !== '' ? $typeName : null,
+                    'keluasan_mps' => $keluasanMps !== '' ? $keluasanMps : null,
+                    'amount' => $row['amount'] ?? $rate?->amount ?? null,
                 ]);
             }
 
@@ -1645,5 +1693,16 @@ class LicenseApplicationController extends Controller
         $rate->delete();
 
         return back()->with('success', 'Kadar dibuang.');
+    }
+
+    public function generatePdf(LicenseApplication $application)
+    {
+        $application->load(['user', 'license']);
+
+        $pdf = Pdf::loadView('pdf.license_application', [
+            'application' => $application
+        ]);
+
+        return $pdf->stream('license-application-'.$application->id.'.pdf');
     }
 }

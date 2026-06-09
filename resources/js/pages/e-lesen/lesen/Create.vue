@@ -160,6 +160,8 @@ interface AdditionalActivityRow {
 const additionalActivities = ref<AdditionalActivityOption[]>([])
 const additionalActivitiesLoading = ref(false)
 const additionalActivitiesMessage = ref('')
+const isRestoringFormDraft = ref(true)
+const hasLoadedAdditionalActivities = ref(false)
 
 const activityById = computed(() => {
   return new Map(additionalActivities.value.map((activity) => [activity.id, activity]))
@@ -170,6 +172,14 @@ const selectedAdditionalActivities = computed(() => {
     .map((activityId) => activityById.value.get(activityId))
     .filter((activity): activity is AdditionalActivityOption => Boolean(activity))
 })
+
+function syncSelectedAdditionalActivitiesWhenReady() {
+  if (isRestoringFormDraft.value || !hasLoadedAdditionalActivities.value) {
+    return
+  }
+
+  syncSelectedAdditionalActivitiesWithLoadedOptions()
+}
 
 function createEmptyActivityRow(): AdditionalActivityRow {
   return {
@@ -485,7 +495,7 @@ watch(
 watch(
   () => form.value.advertisment_info.selected_activity_ids,
   () => {
-    syncSelectedAdditionalActivitiesWithLoadedOptions()
+    syncSelectedAdditionalActivitiesWhenReady()
   },
   { deep: true },
 )
@@ -593,8 +603,15 @@ function restoreFormDraft() {
     } else {
       step.value = 1
     }
+
+    isRestoringFormDraft.value = false
+
+    if (hasLoadedAdditionalActivities.value) {
+      syncSelectedAdditionalActivitiesWithLoadedOptions()
+    }
   } catch (error) {
     console.error('Failed to restore license application draft', error)
+    isRestoringFormDraft.value = false
   }
 }
 
@@ -691,8 +708,9 @@ async function fetchAdditionalActivitiesByDistrict(districtId: number | null) {
     additionalActivities.value = Array.isArray(payload?.activities)
       ? payload.activities
       : []
+    hasLoadedAdditionalActivities.value = true
 
-    syncSelectedAdditionalActivitiesWithLoadedOptions()
+    syncSelectedAdditionalActivitiesWhenReady()
   } catch (error) {
     additionalActivities.value = []
     form.value.advertisment_info.selected_activity_ids = []
@@ -1001,12 +1019,17 @@ function submitForm() {
 
   const companyInfo = form.value.company_info
 
-  const advertisementInfoPayload = selectedAdditionalActivities.value
+  const additionalInfoPayload = selectedAdditionalActivities.value
     .flatMap((activity) => {
       return getSelectedRowsForActivity(activity).map((item) => ({
+        additional_activity_id: activity.id,
+        additional_activity_rate_id: item.rate.id,
+        activity_name: activity.activity_name,
         activity_type: activity.activity_name,
         jenis: item.rate.type_name,
         keluasan_mps: formatAreaRange(item.rate.min_area, item.rate.max_area),
+        type_name: item.rate.type_name,
+        amount: item.rate.amount,
       }))
     })
 
@@ -1014,7 +1037,7 @@ function submitForm() {
     district_id: form.value.district_id,
     applicant_info: form.value.applicant_info,
     company_info: companyInfo,
-    advertisement_info: advertisementInfoPayload,
+    additional_info: additionalInfoPayload,
     processing_fee: {
       amount: processingFeeAmountInCents,
       paid: form.value.processing_fee_paid,
@@ -2384,9 +2407,19 @@ function getPbtCardClass(index: number) {
                     <div class="text-sm text-slate-900 dark:text-slate-100">{{ form.company_info.company_phone_hq || '-' }}</div>
                   </div>
                 </div>
+              </section>
 
-                <div class="mt-6">
-                  <div class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">Kategori Lesen Yang Dipohon</div>
+              <section>
+                
+              </section>
+
+              <section>
+                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{{ stepTitles[3] }}</h3>
+                <div v-if="additionalActivitiesTotalAmount <= 0" class="text-sm text-slate-600 dark:text-slate-300">
+                  Tiada aktiviti tambahan dipilih.
+                </div>
+                <div v-else class="space-y-3">
+                  <h4 class="text-md font-semibold text-slate-900 dark:text-slate-100 mb-4">Kategori Lesen Yang Dipohon</h4>
                   <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
@@ -2399,15 +2432,8 @@ function getPbtCardClass(index: number) {
                       </div>
                     </div>
                   </div>
-                </div>
-              </section>
 
-              <section>
-                <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">{{ stepTitles[3] }}</h3>
-                <div v-if="additionalActivitiesTotalAmount <= 0" class="text-sm text-slate-600 dark:text-slate-300">
-                  Tiada aktiviti tambahan dipilih.
-                </div>
-                <div v-else class="space-y-3">
+                  <h4 class="text-md font-semibold text-slate-900 dark:text-slate-100 mb-4">Aktiviti Tambahan</h4>
                   <div
                     v-for="activity in selectedAdditionalActivities"
                     :key="`summary-${activity.id}`"

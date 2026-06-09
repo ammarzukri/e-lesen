@@ -10,7 +10,7 @@ type LicenseType = {
     unit_bilik?: string;
 };
 
-type AdvertisementInfo = {
+type AdditionalInfo = {
     activity_type?: string;
     jenis?: string;
     keluasan_mps?: string;
@@ -83,7 +83,7 @@ type LicenseApplication = {
     remarks?: string;
     created_at?: string;
     license_types?: LicenseType[];
-    additional_infos?: AdvertisementInfo[];
+    additional_infos?: AdditionalInfo[];
     documents?: LicenseDocument[];
     payment_status?: string;
     payment_amount?: string;
@@ -148,6 +148,10 @@ const dateFormatter = new Intl.DateTimeFormat('en-GB', {
     month: '2-digit',
     year: 'numeric',
 });
+
+const openPdf = () => {
+    window.open(`/admin/license-applications/${props.application.id}/pdf`, '_blank');
+};
 
 const previewUrl = ref<string | null>(null);
 const previewTitle = ref<string>('');
@@ -344,6 +348,13 @@ function submitReject() {
                        ← Kembali
                     </Link>
                 </div>
+
+                <button
+                    @click="openPdf"
+                    class="px-3 py-1 rounded-lg bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800"
+                >
+                    Cetak Permohonan
+                </button>
 
                 <div
                     class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/60 p-6 space-y-8"

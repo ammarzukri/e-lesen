@@ -58,11 +58,6 @@ class LicenseApplication extends Model
         return $this->hasMany(LicenseType::class, 'license_application_id');
     }
 
-    public function advertisementInfos()
-    {
-        return $this->hasMany(AdvertisementInfo::class, 'license_application_id');
-    }
-
     public function additionalInfos()
     {
         return $this->hasMany(AdditionalInfo::class, 'license_application_id');
@@ -86,5 +81,10 @@ class LicenseApplication extends Model
     public function pbtDistrict(): BelongsTo
     {
         return $this->belongsTo(District::class, 'district_id');
+    }
+
+    public function license()
+    {
+        return $this->belongsTo(License::class, 'license_id');
     }
 }
