@@ -156,7 +156,7 @@ const rates = computed(() => props.activity.rates ?? []);
                                         @click="deleteRate(rate.id)"
                                         class="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
                                     >
-                                        Buang
+                                        Padam
                                     </button>
                                 </div>
                             </td>

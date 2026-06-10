@@ -11,8 +11,8 @@ type LicenseType = {
 };
 
 type AdditionalInfo = {
-    activity_type?: string;
-    jenis?: string;
+    activity_name?: string;
+    type_name?: string;
     keluasan_mps?: string;
 };
 
@@ -860,6 +860,76 @@ function submitReject() {
                         <h3
                             class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4"
                         >
+                            Maklumat Perniagaan / Syarikat (Ibu Pejabat)
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div
+                                    class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                >
+                                    Alamat Perniagaan (Ibu Pejabat)
+                                </div>
+                                <div
+                                    class="text-md text-slate-900 dark:text-slate-100"
+                                >
+                                    {{ application.company_address_hq || '-' }}
+                                </div>
+                            </div>
+                            <div>
+                                <div
+                                    class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                >
+                                    Poskod
+                                </div>
+                                <div
+                                    class="text-md text-slate-900 dark:text-slate-100"
+                                >
+                                    {{ application.company_postcode_hq || '-' }}
+                                </div>
+                            </div>
+                            <div>
+                                <div
+                                    class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                >
+                                    Daerah
+                                </div>
+                                <div
+                                    class="text-md text-slate-900 dark:text-slate-100"
+                                >
+                                    {{ application.company_district_hq || '-' }}
+                                </div>
+                            </div>
+                            <div>
+                                <div
+                                    class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                >
+                                    Negeri
+                                </div>
+                                <div
+                                    class="text-md text-slate-900 dark:text-slate-100"
+                                >
+                                    {{ application.company_state_hq || '-' }}
+                                </div>
+                            </div>
+                            <div>
+                                <div
+                                    class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                >
+                                    No Telefon Syarikat (Ibu Pejabat)
+                                </div>
+                                <div
+                                    class="text-md text-slate-900 dark:text-slate-100"
+                                >
+                                    {{ application.company_phone_hq || '-' }}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h3
+                            class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4"
+                        >
                             Jenis Lesen Yang Dipohon
                         </h3>
                         <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
@@ -905,7 +975,7 @@ function submitReject() {
                                 class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"
                             >
                                 <div class="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                                    #{{ idx + 1 }} {{ formatActivityType(item.activity_type) }} 
+                                    #{{ idx + 1 }} {{ formatActivityType(item.activity_name) }} 
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
                                     <div>
@@ -917,19 +987,19 @@ function submitReject() {
                                         <div
                                             class="text-md text-slate-900 dark:text-slate-100"
                                         >
-                                            {{ formatActivityType(item.activity_type) }}
+                                            {{ formatActivityType(item.activity_name) }}
                                         </div>
                                     </div>
-                                    <div v-if="activityJenisLabel(item.activity_type)">
+                                    <div v-if="activityJenisLabel(item.type_name)">
                                         <div
                                             class="text-sm font-semibold text-slate-600 dark:text-slate-400"
                                         >
-                                            {{ activityJenisLabel(item.activity_type) }}
+                                            {{ activityJenisLabel(item.type_name) }}
                                         </div>
                                         <div
                                             class="text-md text-slate-900 dark:text-slate-100"
                                         >
-                                            {{ item.jenis || '-' }}
+                                            {{ item.type_name || '-' }}
                                         </div>
                                     </div>
                                     <div>

@@ -1158,8 +1158,6 @@ class LicenseApplicationController extends Controller
             'additional_info.*.additional_activity_id' => ['nullable', 'integer', 'exists:additional_activities,id'],
             'additional_info.*.additional_activity_rate_id' => ['nullable', 'integer', 'exists:additional_activity_rates,id'],
             'additional_info.*.activity_name' => ['nullable', 'string', 'max:255'],
-            'additional_info.*.activity_type' => ['nullable', 'string', 'max:255'],
-            'additional_info.*.jenis' => ['nullable', 'string', 'max:255'],
             'additional_info.*.type_name' => ['nullable', 'string', 'max:255'],
             'additional_info.*.keluasan_mps' => ['nullable', 'string', 'max:255'],
             'additional_info.*.amount' => ['nullable', 'numeric'],
@@ -1277,8 +1275,6 @@ class LicenseApplicationController extends Controller
                     $row['additional_activity_id'] ?? null,
                     $row['additional_activity_rate_id'] ?? null,
                     $row['activity_name'] ?? null,
-                    $row['activity_type'] ?? null,
-                    $row['jenis'] ?? null,
                     $row['type_name'] ?? null,
                     $row['keluasan_mps'] ?? null,
                     $row['amount'] ?? null,
@@ -1293,8 +1289,8 @@ class LicenseApplicationController extends Controller
                 $activity = $activityId ? AdditionalActivity::query()->find($activityId) : null;
                 $rate = $rateId ? AdditionalActivityRate::query()->find($rateId) : null;
 
-                $activityName = trim((string) ($row['activity_name'] ?? $row['activity_type'] ?? $activity?->activity_name ?? ''));
-                $typeName = trim((string) ($row['type_name'] ?? $row['jenis'] ?? $rate?->type_name ?? ''));
+                $activityName = trim((string) ($row['activity_name'] ?? $activity?->activity_name ?? ''));
+                $typeName = trim((string) ($row['type_name'] ?? $rate?->type_name ?? ''));
                 $keluasanMps = trim((string) ($row['keluasan_mps'] ?? ''));
 
                 if ($keluasanMps === '' && $rate) {
@@ -1313,8 +1309,6 @@ class LicenseApplicationController extends Controller
                 $licenseApplication->additionalInfos()->create([
                     'additional_activity_id' => $activity?->id ?? $activityId,
                     'additional_activity_rate_id' => $rate?->id ?? $rateId,
-                    'activity_type' => $activityName !== '' ? $activityName : null,
-                    'jenis' => $typeName !== '' ? $typeName : null,
                     'activity_name' => $activityName !== '' ? $activityName : null,
                     'type_name' => $typeName !== '' ? $typeName : null,
                     'keluasan_mps' => $keluasanMps !== '' ? $keluasanMps : null,

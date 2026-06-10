@@ -12,8 +12,6 @@ class AdditionalInfo extends Model
         'license_application_id',
         'additional_activity_id',
         'additional_activity_rate_id',
-        'activity_type',
-        'jenis',
         'activity_name',
         'type_name',
         'keluasan_mps',

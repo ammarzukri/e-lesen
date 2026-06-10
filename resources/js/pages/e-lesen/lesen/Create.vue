@@ -1025,8 +1025,6 @@ function submitForm() {
         additional_activity_id: activity.id,
         additional_activity_rate_id: item.rate.id,
         activity_name: activity.activity_name,
-        activity_type: activity.activity_name,
-        jenis: item.rate.type_name,
         keluasan_mps: formatAreaRange(item.rate.min_area, item.rate.max_area),
         type_name: item.rate.type_name,
         amount: item.rate.amount,

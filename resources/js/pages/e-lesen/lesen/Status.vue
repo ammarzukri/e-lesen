@@ -55,6 +55,21 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const applications = computed(() => props.applications ?? [])
 
+const formatLicenseType = (value: string) => {
+    const licenseTypes: Record<string, string> = {
+        homestay_island: '"Homestay", "Kampungstay", dan "Townstay" di pulau, tasik, atau seumpamanya',
+        homestay_land: '"Homestay", "Kampungstay", dan "Townstay" selain di pulau, tasik, atau seumpamanya',
+        campsite_island: 'Tapak perkhemahan dan tapak perkhemahan mewah di pulau, tasik, atau seumpamanya',
+        campsite_land: 'Tapak perkhemahan dan tapak perkhemahan mewah selain di pulau, tasik, atau seumpamanya',
+        rv_site: 'Tapak kenderaan rekreasi',
+        houseboat_raft_kelong: 'Rumah bot, rumah rakit, dan kelong',
+        others_island: 'Mana-mana rumah tumpangan lain di pulau, tasik, atau seumpamanya',
+        others_land: 'Mana-mana rumah tumpangan lain selain di pulau, tasik, atau seumpamanya',
+    }
+
+    return licenseTypes[value] ?? value
+}
+
 const page = usePage<
 	AppPageProps<{
 		flash?: {
@@ -246,7 +261,7 @@ function formatDate(dateString?: string): string {
 									</div>
 								</div>
 
-								<section>
+								<section v-if="application.status === 'Ditolak'">
 									<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
 										Ulasan Penolakan
 									</h3>
@@ -289,7 +304,7 @@ function formatDate(dateString?: string): string {
 											class="rounded-xl border border-slate-200 dark:border-slate-700 p-3"
 										>
 											<div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Lesen #{{ idx + 1 }}</div>
-											<div class="text-sm text-slate-900 dark:text-slate-100">{{ activity }}</div>
+											<div class="text-sm text-slate-900 dark:text-slate-100">{{ formatLicenseType(activity) }}</div>
 										</div>
 										<div v-if="!getActivityList(application).length" class="text-sm text-slate-600 dark:text-slate-400">
 											Tiada lesen direkodkan.

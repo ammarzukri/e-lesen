@@ -16,8 +16,6 @@ return new class extends Migration
             $table->foreignId('license_application_id')
                 ->constrained('license_application')
                 ->cascadeOnDelete();
-            $table->string('activity_type')->nullable();
-            $table->string('jenis')->nullable();
             $table->string('keluasan_mps')->nullable();
             $table->timestamps();
         });
