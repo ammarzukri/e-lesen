@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { LayoutGrid, Banknote, Users, DollarSign, HandCoins, WalletCards } from 'lucide-vue-next';
+import { LayoutGrid, Banknote, Users, DollarSign, HandCoins, WalletCards, Settings, Lock, Palette } from 'lucide-vue-next';
 
 const page = usePage();
 const role = page.props.auth?.user?.role;
 const isAdminRole = ['admin', 'bkt_admin', 'pbt_admin', 'bendahara_admin'].includes(role ?? '');
+const isSuperAdmin = role === 'super_admin';
 
-const navigationItems = isAdminRole
+const navigationItems = isSuperAdmin
+    ? [
+        { label: 'Dashboard', href: '/fi-sejahtera/dashboard', icon: LayoutGrid },
+        { label: 'Tetapan Profil', href: '/fi-sejahtera/settings/profile', icon: Settings },
+        { label: 'Tetapan Kata Laluan', href: '/fi-sejahtera/settings/password', icon: Lock },
+        { label: 'Tetapan Paparan', href: '/fi-sejahtera/settings/appearance', icon: Palette },
+    ]
+    : isAdminRole
     ? [
         { label: 'Dashboard', href: '/fi-sejahtera/dashboard', icon: LayoutGrid },
         // { label: 'Senarai Tetamu', href: '/fi-sejahtera/guest', icon: Users },

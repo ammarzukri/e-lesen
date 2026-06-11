@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { App, Link, usePage } from '@inertiajs/vue3';
-import { FolderOpen, AppWindow, LayoutGrid, Info, Timer, CircleFadingPlus } from 'lucide-vue-next';
+import { FolderOpen, AppWindow, LayoutGrid, Info, Timer, CircleFadingPlus, ShieldUser } from 'lucide-vue-next';
 
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -24,9 +24,35 @@ import AppLogo from './AppLogo.vue';
 const page = usePage();
 const isAdmin = computed(() => ['admin', 'bkt_admin', 'bendahara_admin'].includes(page.props.auth?.user?.role ?? ''));
 const isPbtAdmin = computed(() => page.props.auth?.user?.role === 'pbt_admin');
+const isSuperAdmin = computed(() => page.props.auth?.user?.role === 'super_admin');
 const isStaff = computed(() => page.props.auth?.user?.role === 'staff');
 
 const mainNavItems = computed<NavItem[]>(() => {
+    if (isSuperAdmin.value) {
+        return [
+            {
+                title: 'Dashboard',
+                href: dashboard(),
+                icon: LayoutGrid,
+            },
+            {
+                title: 'Senarai Permohonan',
+                href: '/admin/license-applications',
+                icon: FolderOpen,
+            },
+            {
+                title: 'Pembaharuan Lesen',
+                href: '/admin/license-renewals',
+                icon: Timer,
+            },
+            {
+                title: 'Senarai Admin',
+                href: '/super-admin/admins',
+                icon: ShieldUser,
+            },
+        ];
+    }
+
     if (isAdmin.value) {
         return [
             {

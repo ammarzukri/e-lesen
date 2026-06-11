@@ -29,7 +29,7 @@ Route::get('/countries', [CountryController::class, 'index'])
 
 Route::get('dashboard', function () {
     $user = auth()->user();
-    $isBktAdmin = $user && in_array($user->role, ['admin', 'bkt_admin', 'bendahara_admin'], true);
+    $isBktAdmin = $user && in_array($user->role, ['admin', 'bkt_admin', 'bendahara_admin', 'super_admin'], true);
     $isPbtAdmin = $user && $user->role === 'pbt_admin';
 
     if ($isBktAdmin || $isPbtAdmin) {
@@ -454,5 +454,9 @@ Route::put('/admin/license-additional-activities/rates/{rate}', [LicenseApplicat
 Route::delete('/admin/license-additional-activities/rates/{rate}', [LicenseApplicationController::class, 'deleteAdditionalActivityRate'])
     ->middleware(['auth'])
     ->name('admin.license.additional-activities.rates.destroy');
+
+Route::get('/super-admin/admins', [LicenseApplicationController::class, 'adminListIndex'])
+    ->middleware(['auth'])
+    ->name('super-admin.admins');
 
 require __DIR__.'/settings.php';

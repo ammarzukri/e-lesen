@@ -267,52 +267,52 @@ function deleteActivity(activity: { id: number }) {
     </AppLayout>
 
     <div
-    v-if="showAddModal"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-    @click.self="closeAddModal"
->
-    <div
-        class="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 p-6 shadow-xl"
+        v-if="showAddModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+        @click.self="closeAddModal"
     >
-        <h3
-            class="text-lg font-semibold text-slate-900 dark:text-slate-100"
+        <div
+            class="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 p-6 shadow-xl"
         >
-            Tambah Aktiviti
-        </h3>
-
-        <div class="mt-4">
-            <label
-                class="mb-2 block text-sm font-medium text-slate-900 dark:text-slate-100"
+            <h3
+                class="text-lg font-semibold text-slate-900 dark:text-slate-100"
             >
-                Nama Aktiviti
-            </label>
+                Tambah Aktiviti
+            </h3>
 
-            <input
-                v-model="activityName"
-                type="text"
-                placeholder="Masukkan nama aktiviti"
-                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
-            />
-        </div>
+            <div class="mt-4">
+                <label
+                    class="mb-2 block text-sm font-medium text-slate-900 dark:text-slate-100"
+                >
+                    Nama Aktiviti
+                </label>
 
-        <div class="mt-6 flex justify-end gap-2">
-            <button
-                type="button"
-                class="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
-                @click="closeAddModal"
-            >
-                Batal
-            </button>
+                <input
+                    v-model="activityName"
+                    type="text"
+                    placeholder="Masukkan nama aktiviti"
+                    class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+            </div>
 
-            <button
-                type="button"
-                class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                :disabled="!activityName.trim()"
-                @click="addActivity"
-            >
-                Tambah
-            </button>
+            <div class="mt-6 flex justify-end gap-2">
+                <button
+                    type="button"
+                    class="rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600"
+                    @click="closeAddModal"
+                >
+                    Batal
+                </button>
+
+                <button
+                    type="button"
+                    class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                    :disabled="!activityName.trim()"
+                    @click="addActivity"
+                >
+                    Tambah
+                </button>
+            </div>
         </div>
     </div>
-</div>
 </template>

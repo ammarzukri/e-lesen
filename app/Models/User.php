@@ -84,8 +84,8 @@ class User extends Authenticatable
         return $this->hasOne(HotelStaff::class);
     }
 
-    public function pbtDistrict(): BelongsTo
+    public function district(): BelongsTo
     {
-        return $this->belongsTo(District::class, 'district_id');
+        return $this->belongsTo(District::class);
     }
 }

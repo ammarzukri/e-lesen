@@ -71,7 +71,7 @@ class LicenseApplicationController extends Controller
 
     protected function ensurePbtAdminHasPbt(): void
     {
-        if ($this->isPbtAdmin() && ($this->pbtAdminDistrictId() === null || $this->pbtAdminName() === '')) {
+        if ($this->isPbtAdmin() && ($this->pbtAdminDistrictId() === null)) {
             abort(403, 'Akaun pbt_admin tidak mempunyai PBT yang ditetapkan.');
         }
     }
@@ -1698,5 +1698,36 @@ class LicenseApplicationController extends Controller
         ]);
 
         return $pdf->stream('license-application-'.$application->id.'.pdf');
+    }
+
+    public function adminListIndex()
+    {
+        $query = \App\Models\User::query()
+            ->with('district:id,district_name')
+            ->whereIn('role', [
+                'pbt_clerk',
+                'pbt_admin',
+                'pbt_license_officer',
+                'pbt_site_visit_officer',
+                'bkt_officer',
+                'bkt_admin',
+                'bendahara_admin',
+                'accountant',
+                'atd_atl_officer',
+                'super_admin',
+            ])
+            ->orderBy('name');
+
+        $admins = $query->get([
+            'id',
+            'name',
+            'email',
+            'role',
+            'district_id',
+        ]);
+
+        return Inertia::render('e-lesen/admin/AdminList', [
+            'admins' => $admins,
+        ]);
     }
 }
