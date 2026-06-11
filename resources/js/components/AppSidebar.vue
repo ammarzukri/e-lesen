@@ -36,16 +36,6 @@ const mainNavItems = computed<NavItem[]>(() => {
                 icon: LayoutGrid,
             },
             {
-                title: 'Senarai Permohonan',
-                href: '/admin/license-applications',
-                icon: FolderOpen,
-            },
-            {
-                title: 'Pembaharuan Lesen',
-                href: '/admin/license-renewals',
-                icon: Timer,
-            },
-            {
                 title: 'Senarai Admin',
                 href: '/super-admin/admins',
                 icon: ShieldUser,

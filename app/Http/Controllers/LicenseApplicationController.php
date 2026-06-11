@@ -6,11 +6,13 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
+use App\Models\User;
 use App\Models\District;
 use App\Models\Hotel;
 use App\Models\HotelStaff;
@@ -1723,11 +1725,74 @@ class LicenseApplicationController extends Controller
             'name',
             'email',
             'role',
+            'phone_number',
             'district_id',
+        ]);
+
+        $districts = \App\Models\District::query()
+        ->orderBy('district_name')
+        ->get([
+            'id',
+            'district_name',
         ]);
 
         return Inertia::render('e-lesen/admin/AdminList', [
             'admins' => $admins,
+            'districts' => $districts,
         ]);
+    }
+
+    public function storeAdmin(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'unique:users,email'],
+            'role' => ['required', 'string'],
+            'phone_number' => ['nullable', 'string', 'max:20'],
+            'district_id' => ['nullable', 'exists:districts,id'],
+            'password' => ['nullable', 'string', 'min:8'],
+        ]);
+
+        $password = $validated['password']
+            ?: Str::password(12);
+
+        User::create([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone_number' => $validated['phone_number'] ?? null,
+            'role' => $validated['role'],
+            'district_id' => $validated['district_id'] ?? null,
+            'password' => Hash::make($password),
+        ]);
+
+        return back()->with('success', 'Admin berjaya ditambah.');
+    }
+
+    public function updateAdmin(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'unique:users,email,' . $user->id],
+            'role' => ['required', 'string'],
+            'phone_number' => ['nullable', 'string', 'max:20'],
+            'district_id' => ['nullable', 'exists:districts,id'],
+        ]);
+
+        $user->update([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'role' => $validated['role'],
+            'phone_number' => $validated['phone_number'] ?? null,
+            'district_id' => $validated['district_id'] ?? null,
+        ]);
+
+        return back()->with('success', 'Admin berjaya dikemaskini.');
+    }
+
+    public function deleteAdmin(User $user)
+    {
+        $user->delete();
+
+        return back()->with('success', 'Admin berjaya dibuang.');
     }
 }

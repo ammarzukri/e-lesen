@@ -15,14 +15,21 @@ const props = defineProps<{
         name: string;
         email: string;
         role: string;
+        phone_number?: string | null;
+        district_id?: number | null;
         district?: {
             id: number;
             district_name: string;
         };
     }[];
+    districts?: {
+        id: number;
+        district_name: string;
+    }[];
 }>();
 
 const admins = ref(props.admins ?? []);
+const districtId = ref<number | null>(null);
 
 const formatRole = (value: string) => {
     const role: Record<string, string> = {
@@ -35,11 +42,20 @@ const formatRole = (value: string) => {
     return role[value] ?? value
 }
 
+const rolesWithDistrict = [
+    'pbt_admin',
+    'pbt_clerk',
+    'pbt_license_officer',
+    'pbt_site_visit_officer',
+    'atd_atl_officer',
+];
+
 /* ---------------- CREATE MODAL ---------------- */
 const showAddModal = ref(false);
 
 const name = ref('');
 const email = ref('');
+const phoneNumber = ref('');
 const password = ref('');
 const role = ref('pbt_clerk');
 
@@ -51,6 +67,7 @@ function closeAddModal() {
     showAddModal.value = false;
     name.value = '';
     email.value = '';
+    phoneNumber.value = '';
     password.value = '';
     role.value = 'pbt_clerk';
 }
@@ -59,6 +76,8 @@ function createAdmin() {
     router.post('/super-admin/admins', {
         name: name.value,
         email: email.value,
+        phone_number: phoneNumber.value,
+        district_id: districtId.value,
         password: password.value,
         role: role.value,
     }, {
@@ -72,17 +91,21 @@ function createAdmin() {
 
 /* ---------------- EDIT MODAL ---------------- */
 const showEditModal = ref(false);
+const editDistrictId = ref<number | null>(null);
 
 const editId = ref<number | null>(null);
 const editName = ref('');
 const editEmail = ref('');
+const editPhoneNumber = ref('');
 const editRole = ref('');
 
 function openEditModal(admin: any) {
     editId.value = admin.id;
     editName.value = admin.name;
     editEmail.value = admin.email;
+    editPhoneNumber.value = admin.phone_number ?? '';
     editRole.value = admin.role;
+    editDistrictId.value = admin.district_id ?? null;
 
     showEditModal.value = true;
 }
@@ -93,6 +116,7 @@ function closeEditModal() {
     editId.value = null;
     editName.value = '';
     editEmail.value = '';
+    editPhoneNumber.value = '';
     editRole.value = '';
 }
 
@@ -103,6 +127,8 @@ function updateAdmin() {
         _method: 'PATCH',
         name: editName.value,
         email: editEmail.value,
+        phone_number: editPhoneNumber.value,
+        district_id: editDistrictId.value,
         role: editRole.value,
     }, {
         preserveScroll: true,
@@ -162,6 +188,7 @@ watch(() => props.admins, (v) => {
                             <th class="border border-gray-200 dark:border-gray-700 p-3 text-left">Bil</th>
                             <th class="border border-gray-200 dark:border-gray-700 p-3 text-left">Nama</th>
                             <th class="border border-gray-200 dark:border-gray-700 p-3 text-left">Email</th>
+                            <th class="border border-gray-200 dark:border-gray-700 p-3 text-left">No. Telefon</th>
                             <th class="border border-gray-200 dark:border-gray-700 p-3 text-left">Peranan</th>
                             <th class="border border-gray-200 dark:border-gray-700 p-3 text-left">Daerah</th>
                             <th class="border border-gray-200 dark:border-gray-700 p-3 text-left">Tindakan</th>
@@ -173,6 +200,7 @@ watch(() => props.admins, (v) => {
                             <td class="border border-gray-200 dark:border-gray-700 p-3">{{ index + 1 }}</td>
                             <td class="border border-gray-200 dark:border-gray-700 p-3">{{ admin.name }}</td>
                             <td class="border border-gray-200 dark:border-gray-700 p-3">{{ admin.email }}</td>
+                            <td class="border border-gray-200 dark:border-gray-700 p-3">{{ admin.phone_number ?? '-' }}</td>
                             <td class="border border-gray-200 dark:border-gray-700 p-3">{{ formatRole(admin.role) }}</td>
                             <td class="border border-gray-200 dark:border-gray-700 p-3">{{ admin.district?.district_name ?? '-' }}</td>
 
@@ -250,6 +278,20 @@ watch(() => props.admins, (v) => {
                 </div>
 
                 <div>
+                    <label class="block text-sm font-medium mb-1 text-slate-900 dark:text-slate-100"
+                    >
+                        No. Telefon
+                    </label>
+
+                    <input
+                        v-model="phoneNumber"
+                        type="text"
+                        placeholder="Contoh: 0123456789"
+                        class="w-full border p-2 rounded-lg"
+                    />
+                </div>
+
+                <div>
                     <label
                         class="block text-sm font-medium mb-1 text-slate-900 dark:text-slate-100"
                     >
@@ -275,9 +317,33 @@ watch(() => props.admins, (v) => {
                     >
                         <option value="pbt_clerk">Kerani PBT</option>
                         <option value="pbt_license_officer">Pegawai Lesen PBT</option>
+                        <option value="pbt_site_visit_officer">Pegawai Lawatan Tapak PBT</option>
                         <option value="bkt_officer">Pegawai BKT</option>
                         <option value="accountant">Akauntan</option>
                         <option value="atd_atl_officer">Pegawai ATD/ATL</option>
+                    </select>
+                </div>
+
+                <div v-if="rolesWithDistrict.includes(role)">
+                    <label class="block text-sm font-medium mb-1">
+                        Daerah
+                    </label>
+
+                    <select
+                        v-model="districtId"
+                        class="w-full border p-2 rounded-lg"
+                    >
+                        <option :value="null">
+                            Pilih Daerah
+                        </option>
+
+                        <option
+                            v-for="district in props.districts"
+                            :key="district.id"
+                            :value="district.id"
+                        >
+                            {{ district.district_name }}
+                        </option>
                     </select>
                 </div>
 
@@ -340,6 +406,18 @@ watch(() => props.admins, (v) => {
 
                 <div>
                     <label class="block text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">
+                        No. Telefon
+                    </label>
+
+                    <input
+                        v-model="editPhoneNumber"
+                        type="text"
+                        class="w-full border p-2 rounded-lg"
+                    />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-slate-900 dark:text-slate-100">
                         Peranan
                     </label>
                     <select
@@ -350,6 +428,29 @@ watch(() => props.admins, (v) => {
                         <option value="bkt_admin">Admin BKT</option>
                         <option value="bendahara_admin">Admin Perbendaharaan</option>
                         <option value="super_admin">Super Admin</option>
+                    </select>
+                </div>
+
+                <div v-if="rolesWithDistrict.includes(editRole)">
+                    <label class="block text-sm font-medium mb-1">
+                        Daerah
+                    </label>
+
+                    <select
+                        v-model="editDistrictId"
+                        class="w-full border p-2 rounded-lg"
+                    >
+                        <option :value="null">
+                            Pilih Daerah
+                        </option>
+
+                        <option
+                            v-for="district in props.districts"
+                            :key="district.id"
+                            :value="district.id"
+                        >
+                            {{ district.district_name }}
+                        </option>
                     </select>
                 </div>
 

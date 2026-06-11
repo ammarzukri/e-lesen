@@ -459,4 +459,13 @@ Route::get('/super-admin/admins', [LicenseApplicationController::class, 'adminLi
     ->middleware(['auth'])
     ->name('super-admin.admins');
 
+Route::post('/super-admin/admins', [LicenseApplicationController::class, 'storeAdmin'])
+    ->middleware(['auth']);
+
+Route::patch('/super-admin/admins/{user}', [LicenseApplicationController::class, 'updateAdmin'])
+    ->middleware(['auth']);
+
+Route::delete('/super-admin/admins/{user}', [LicenseApplicationController::class, 'deleteAdmin'])
+    ->middleware(['auth']);
+
 require __DIR__.'/settings.php';
