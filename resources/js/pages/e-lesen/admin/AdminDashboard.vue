@@ -134,14 +134,14 @@ function openApplicationsByStatus(status?: string) {
 
                 <div
                     class="relative cursor-pointer overflow-hidden rounded-xl border border-sidebar-border/70 bg-white p-5 transition-colors hover:bg-slate-50 dark:border-sidebar-border dark:bg-[#0f172a] dark:hover:bg-slate-900"
-                    @click="openApplicationsByStatus('Ditolak')"
+                    @click="openApplicationsByStatus('Tidak Lengkap')"
                 >
                     <div class="flex items-center gap-4">
                         <div class="flex h-12 w-12 items-center justify-center rounded-full bg-[#ffefef] dark:bg-[#2a0b0b]">
                             <XCircle class="h-6 w-6 text-rose-600" />
                         </div>
                         <div>
-                            <p class="text-sm text-muted-foreground">Ditolak</p>
+                            <p class="text-sm text-muted-foreground">Tidak Lengkap</p>
                             <p class="mt-2 text-3xl font-semibold text-rose-600 dark:text-rose-400">{{ rejectedApplications }}</p>
                         </div>
                     </div>

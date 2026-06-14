@@ -23,7 +23,7 @@ import AppLogo from './AppLogo.vue';
 
 const page = usePage();
 const isAdmin = computed(() => ['admin', 'bkt_admin', 'bendahara_admin'].includes(page.props.auth?.user?.role ?? ''));
-const isPbtAdmin = computed(() => page.props.auth?.user?.role === 'pbt_admin');
+const isPbtAdmin = computed(() => page.props.auth?.user?.role === 'pbt_clerk');
 const isSuperAdmin = computed(() => page.props.auth?.user?.role === 'super_admin');
 const isStaff = computed(() => page.props.auth?.user?.role === 'staff');
 

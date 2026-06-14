@@ -38,7 +38,7 @@ class LicenseApplicationController extends Controller
 
     protected function isPbtAdmin(): bool
     {
-        return auth()->user()?->role === 'pbt_admin';
+        return auth()->user()?->role === 'pbt_clerk';
     }
 
     protected function isBendaharaAdmin(): bool
@@ -74,7 +74,7 @@ class LicenseApplicationController extends Controller
     protected function ensurePbtAdminHasPbt(): void
     {
         if ($this->isPbtAdmin() && ($this->pbtAdminDistrictId() === null)) {
-            abort(403, 'Akaun pbt_admin tidak mempunyai PBT yang ditetapkan.');
+            abort(403, 'Akaun pbt_clerk tidak mempunyai PBT yang ditetapkan.');
         }
     }
 
@@ -103,13 +103,47 @@ class LicenseApplicationController extends Controller
         abort_if(auth()->user()?->role === 'staff', 403, 'Staff hanya boleh melihat status lesen.');
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $this->ensureNotStaff();
 
         $user = auth()->user();
         $districts = District::query()->orderBy('district_name')->get(['id', 'district_name']);
         $processFeePayment = $this->latestUnconsumedProcessFeePayment(auth()->id());
+        $resubmitApplicationId = $request->integer('resubmit_application_id');
+
+        if ($resubmitApplicationId) {
+            $resubmissionApplication = LicenseApplication::query()
+                ->with(['user', 'additionalInfos', 'documents'])
+                ->whereKey($resubmitApplicationId)
+                ->where('user_id', auth()->id())
+                ->firstOrFail();
+
+            abort_unless($resubmissionApplication->status === 'Tidak Lengkap', 403);
+
+            $resubmissionPayload = $this->buildResubmissionPayload($resubmissionApplication);
+            $processFeePayload = $this->formatProcessFeePaymentPayload($resubmissionApplication->processFeePayment ?? $processFeePayment);
+
+            if ($resubmissionApplication->payment_status === 'Berjaya') {
+                $processFeePayload = [
+                    'status' => 'paid',
+                    'paid' => true,
+                    'amount' => (int) ($resubmissionApplication->payment_amount ?? $this->processFeeAmountInCents),
+                    'bill_code' => $resubmissionApplication->payment_billcode,
+                    'paid_at' => optional($resubmissionApplication->payment_paid_at)?->toDateTimeString(),
+                ];
+            }
+
+            return Inertia::render('e-lesen/lesen/Create', [
+                'currentUserId' => $user?->id,
+                'currentUserDistrictId' => $resubmissionApplication->district_id,
+                'districts' => $districts,
+                'initialApplicantInfo' => $resubmissionPayload['applicant_info'],
+                'processFeePayment' => $processFeePayload,
+                'resubmissionApplication' => $resubmissionPayload,
+                'submitUrl' => route('license.apply.resubmit', ['application' => $resubmissionApplication->id]),
+            ]);
+        }
 
         if ($processFeePayment && $processFeePayment->payment_status === 'Dalam Proses') {
             $this->syncProcessFeeStatusFromToyyibpay($processFeePayment, false);
@@ -148,7 +182,121 @@ class LicenseApplicationController extends Controller
                 'bill_code' => $processFeePayload['bill_code'],
                 'paid_at' => $processFeePayload['paid_at'],
             ],
+            'submitUrl' => route('license.apply.store'),
         ]);
+    }
+
+    protected function buildResubmissionPayload(LicenseApplication $application): array
+    {
+        $application->loadMissing('user', 'additionalInfos', 'documents');
+
+        $documentTypeOrder = [
+            'memorandum',
+            'pelan_lokasi',
+            'pelan_lantai',
+            'surat_perjanjian',
+            'salinan_geran_tanah',
+            'sijil_menduduki_bangunan',
+            'gambar_pemohon',
+            'salinan_kad_pengenalan_pemohon',
+            'senarai_nama_semua_pengendali_makanan',
+            'carta_proses_pengeluaran',
+        ];
+
+        $documentNames = [];
+        foreach ($documentTypeOrder as $documentType) {
+            $document = $application->documents->firstWhere('document_type', $documentType);
+            $documentNames[] = $document?->file_path ? basename($document->file_path) : '';
+        }
+
+        $selectedActivityIds = $application->additionalInfos
+            ->pluck('additional_activity_id')
+            ->filter()
+            ->map(fn ($value) => (int) $value)
+            ->unique()
+            ->values()
+            ->all();
+
+        $activityRows = [];
+        foreach ($application->additionalInfos as $info) {
+            if (! $info->additional_activity_id) {
+                continue;
+            }
+
+            $activityRows[(int) $info->additional_activity_id][] = [
+                'type_name' => $info->type_name ?? '',
+                'rate_id' => $info->additional_activity_rate_id ? (int) $info->additional_activity_rate_id : null,
+            ];
+        }
+
+        return [
+            'id' => $application->id,
+            'district_id' => $application->district_id,
+            'status' => $application->status,
+            'remarks' => $application->remarks,
+            'payment_status' => $application->payment_status,
+            'payment_amount' => $application->payment_amount,
+            'payment_billcode' => $application->payment_billcode,
+            'payment_paid_at' => optional($application->payment_paid_at)?->toDateTimeString(),
+            'applicant_info' => [
+                'name' => $application->name ?? $application->user?->name ?? '',
+                'ic_no' => $application->user?->ic_no ?? '',
+                'birth_date' => $application->user?->birth_date?->format('Y-m-d') ?? '',
+                'birth_place' => $application->user?->birth_place ?? '',
+                'gender' => $application->user?->gender ?? '',
+                'ethnicity' => $application->user?->ethnicity ?? '',
+                'religion' => $application->user?->religion ?? '',
+                'citizenship' => $application->user?->citizenship ?? '',
+                'marital_status' => $application->user?->maritial_status ?? '',
+                'occupation' => $application->user?->occupation ?? '',
+                'income' => $application->user?->income ?? '',
+                'home_address' => $application->user?->home_address ?? '',
+                'postcode' => $application->user?->postcode ?? '',
+                'state' => $application->user?->state ?? '',
+                'district' => $application->user?->district ?? '',
+                'phone_number' => $application->user?->phone_number ?? '',
+                'email' => $application->email ?? $application->user?->email ?? '',
+            ],
+            'company_info' => [
+                'name' => $application->company_name ?? '',
+                'ic' => '',
+                'company_name' => $application->company_name ?? '',
+                'hotel_name' => $application->hotel_name ?? '',
+                'company_address' => $application->company_address ?? '',
+                'company_postcode' => $application->company_postcode ?? '',
+                'company_state' => $application->company_state ?? '',
+                'company_district' => $application->company_district ?? '',
+                'company_phone' => $application->company_phone ?? '',
+                'company_registration_number' => $application->company_registration_number ?? '',
+                'company_registration_date' => $application->company_registration_date ?? '',
+                'company_registration_expiry_date' => $application->company_registration_expiry_date ?? '',
+                'company_category' => $application->company_category ?? '',
+                'company_premises_location' => $application->company_premises_location ?? '',
+                'license_type_selected' => $application->license_type_selected ?? '',
+                'room_count' => $application->room_count ?? '',
+                'employee_malay' => $application->employee_malay ?? '',
+                'employee_chinese' => $application->employee_chinese ?? '',
+                'employee_indian' => $application->employee_indian ?? '',
+                'employee_others' => $application->employee_others ?? '',
+                'company_operation_start' => $application->company_operation_start ?? '',
+                'company_operation_end' => $application->company_operation_end ?? '',
+                'company_address_hq' => $application->company_address_hq ?? '',
+                'company_postcode_hq' => $application->company_postcode_hq ?? '',
+                'company_state_hq' => $application->company_state_hq ?? '',
+                'company_district_hq' => $application->company_district_hq ?? '',
+                'company_phone_hq' => $application->company_phone_hq ?? '',
+                'company_license_type' => '',
+                'company_license_i' => '',
+                'company_license_ii' => '',
+                'company_license_iii' => '',
+            ],
+            'advertisment_info' => [
+                'address' => $application->company_address ?? '',
+                'selected_activity_ids' => $selectedActivityIds,
+                'activity_rows' => $activityRows,
+            ],
+            'document_names' => $documentNames,
+        ];
     }
 
     public function startProcessFeePayment(Request $request)
@@ -1068,7 +1216,7 @@ class LicenseApplicationController extends Controller
         }
 
         $application->update([
-            'status' => 'Diluluskan',
+            'status' => 'Dihantar ke Pegawai Lawatan Tapak',
         ]);
 
         $application->refresh();
@@ -1105,7 +1253,7 @@ class LicenseApplicationController extends Controller
         ]);
 
         $application->update([
-            'status' => 'Ditolak',
+            'status' => 'Tidak Lengkap',
             'remarks' => trim((string) $validated['remarks']),
         ]);
 
@@ -1403,6 +1551,243 @@ class LicenseApplicationController extends Controller
 
             $this->issueLicenseForHotel($hotel, $application->payment_paid_at);
         });
+    }
+
+    public function resubmit(Request $request, LicenseApplication $application)
+    {
+        $this->ensureNotStaff();
+
+        abort_unless((int) $application->user_id === (int) auth()->id(), 403);
+        abort_unless($application->status === 'Tidak Lengkap', 403);
+
+        $existingProcessFeePayment = $application->processFeePayment;
+
+        $request->validate([
+            'district_id' => ['required', 'integer', 'exists:districts,id'],
+            'applicant_info' => ['required', 'array'],
+            'company_info' => ['required', 'array'],
+            'license_type' => ['nullable', 'array'],
+            'additional_info' => ['nullable', 'array'],
+            'additional_info.*.additional_activity_id' => ['nullable', 'integer', 'exists:additional_activities,id'],
+            'additional_info.*.additional_activity_rate_id' => ['nullable', 'integer', 'exists:additional_activity_rates,id'],
+            'additional_info.*.activity_name' => ['nullable', 'string', 'max:255'],
+            'additional_info.*.type_name' => ['nullable', 'string', 'max:255'],
+            'additional_info.*.keluasan_mps' => ['nullable', 'string', 'max:255'],
+            'additional_info.*.amount' => ['nullable', 'numeric'],
+            'documents' => ['nullable', 'array'],
+            'documents.*.document_type' => ['nullable', 'string'],
+            'documents.*.file' => ['nullable', 'file', 'max:10240'],
+            'processing_fee' => ['required', 'array'],
+            'processing_fee.paid' => ['required', 'boolean'],
+            'processing_fee.bill_code' => ['nullable', 'string'],
+        ]);
+
+        $applicant = $request->input('applicant_info', []);
+        $company = $request->input('company_info', []);
+        $additionalInfos = $request->input('additional_info', []);
+        $documents = $request->input('documents', []);
+        $processFeeAlreadyPaid = $existingProcessFeePayment?->payment_status === 'Berjaya';
+        $processFeePayment = null;
+
+        if (! $processFeeAlreadyPaid) {
+            $requestBillCode = (string) $request->input('processing_fee.bill_code', '');
+            $requestProcessFeePaid = $request->boolean('processing_fee.paid');
+
+            if ($requestProcessFeePaid !== true || $requestBillCode === '') {
+                throw ValidationException::withMessages([
+                    'processing_fee' => 'Bayaran fi proses belum berjaya. Sila lengkapkan bayaran RM100 terlebih dahulu.',
+                ]);
+            }
+
+            $processFeePayment = LicenseProcessFeePayment::query()
+                ->where('user_id', auth()->id())
+                ->where('payment_billcode', $requestBillCode)
+                ->whereNull('consumed_at')
+                ->latest('id')
+                ->first();
+
+            if (! $processFeePayment) {
+                throw ValidationException::withMessages([
+                    'processing_fee' => 'Maklumat bayaran fi proses tidak sah. Sila buat bayaran semula.',
+                ]);
+            }
+
+            if ($processFeePayment->payment_status === 'Dalam Proses') {
+                $this->syncProcessFeeStatusFromToyyibpay($processFeePayment, false);
+                $processFeePayment->refresh();
+            }
+
+            if ($processFeePayment->payment_status !== 'Berjaya') {
+                throw ValidationException::withMessages([
+                    'processing_fee' => 'Bayaran fi proses belum berjaya. Sila lengkapkan bayaran RM100 terlebih dahulu.',
+                ]);
+            }
+        }
+
+        DB::transaction(function () use ($request, $application, $applicant, $company, $additionalInfos, $documents, $processFeeAlreadyPaid, $processFeePayment, $existingProcessFeePayment) {
+            $lockedApplication = LicenseApplication::query()
+                ->whereKey($application->id)
+                ->where('user_id', auth()->id())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            auth()->user()?->update([
+                'district_id' => $request->input('district_id'),
+                'ic_no' => $applicant['ic_no'] ?? null,
+                'birth_date' => $applicant['birth_date'] ?? null,
+                'birth_place' => $applicant['birth_place'] ?? null,
+                'gender' => $applicant['gender'] ?? null,
+                'citizenship' => $applicant['citizenship'] ?? null,
+                'religion' => $applicant['religion'] ?? null,
+                'ethnicity' => $applicant['ethnicity'] ?? null,
+                'maritial_status' => $applicant['marital_status'] ?? null,
+                'occupation' => $applicant['occupation'] ?? null,
+                'income' => $applicant['income'] ?? null,
+                'home_address' => $applicant['home_address'] ?? null,
+                'postcode' => $applicant['postcode'] ?? null,
+                'state' => $applicant['state'] ?? null,
+                'district' => $applicant['district'] ?? null,
+                'phone_number' => $applicant['phone_number'] ?? null,
+            ]);
+
+            $updatePayload = [
+                'name' => $applicant['name'] ?? null,
+                'district_id' => $request->input('district_id'),
+                'status' => 'Dalam Proses',
+                'remarks' => null,
+                'email' => $applicant['email'] ?? null,
+                'company_name' => $company['company_name'] ?? null,
+                'hotel_name' => $company['hotel_name'] ?? null,
+                'company_address' => $company['company_address'] ?? null,
+                'company_postcode' => $company['company_postcode'] ?? null,
+                'company_state' => $company['company_state'] ?? null,
+                'company_district' => $company['company_district'] ?? null,
+                'company_phone' => $company['company_phone'] ?? null,
+                'company_registration_number' => $company['company_registration_number'] ?? null,
+                'company_registration_date' => $company['company_registration_date'] ?? null,
+                'company_registration_expiry_date' => $company['company_registration_expiry_date'] ?? null,
+                'company_category' => $company['company_category'] ?? null,
+                'company_premises_location' => $company['company_premises_location'] ?? null,
+                'license_type_selected' => $company['license_type_selected'] ?? null,
+                'room_count' => $company['room_count'] ?? null,
+                'employee_malay' => $company['employee_malay'] ?? null,
+                'employee_chinese' => $company['employee_chinese'] ?? null,
+                'employee_indian' => $company['employee_indian'] ?? null,
+                'employee_others' => $company['employee_others'] ?? null,
+                'company_operation_start' => $company['company_operation_start'] ?? null,
+                'company_operation_end' => $company['company_operation_end'] ?? null,
+                'company_address_hq' => $company['company_address_hq'] ?? null,
+                'company_postcode_hq' => $company['company_postcode_hq'] ?? null,
+                'company_state_hq' => $company['company_state_hq'] ?? null,
+                'company_district_hq' => $company['company_district_hq'] ?? null,
+                'company_phone_hq' => $company['company_phone_hq'] ?? null,
+            ];
+
+            if ($processFeeAlreadyPaid) {
+                $updatePayload['payment_status'] = 'Berjaya';
+            }
+
+            if ($processFeePayment) {
+                $updatePayload['payment_status'] = 'Berjaya';
+                $updatePayload['payment_amount'] = $processFeePayment->payment_amount;
+                $updatePayload['payment_billcode'] = $processFeePayment->payment_billcode;
+                $updatePayload['payment_attempted_at'] = $processFeePayment->payment_attempted_at;
+                $updatePayload['payment_paid_at'] = $processFeePayment->payment_paid_at;
+            } elseif ($processFeeAlreadyPaid) {
+                $updatePayload['payment_status'] = 'Berjaya';
+                $updatePayload['payment_amount'] = $existingProcessFeePayment?->payment_amount;
+                $updatePayload['payment_billcode'] = $existingProcessFeePayment?->payment_billcode;
+                $updatePayload['payment_attempted_at'] = $existingProcessFeePayment?->payment_attempted_at;
+                $updatePayload['payment_paid_at'] = $existingProcessFeePayment?->payment_paid_at;
+            }
+
+            $lockedApplication->update($updatePayload);
+
+            $lockedApplication->additionalInfos()->delete();
+
+            foreach ($additionalInfos as $row) {
+                $hasRelevantData = array_filter([
+                    $row['additional_activity_id'] ?? null,
+                    $row['additional_activity_rate_id'] ?? null,
+                    $row['activity_name'] ?? null,
+                    $row['type_name'] ?? null,
+                    $row['keluasan_mps'] ?? null,
+                    $row['amount'] ?? null,
+                ], static fn ($value) => $value !== null && $value !== '');
+
+                if ($hasRelevantData === []) {
+                    continue;
+                }
+
+                $activityId = isset($row['additional_activity_id']) ? (int) $row['additional_activity_id'] : null;
+                $rateId = isset($row['additional_activity_rate_id']) ? (int) $row['additional_activity_rate_id'] : null;
+                $activity = $activityId ? AdditionalActivity::query()->find($activityId) : null;
+                $rate = $rateId ? AdditionalActivityRate::query()->find($rateId) : null;
+
+                $activityName = trim((string) ($row['activity_name'] ?? $activity?->activity_name ?? ''));
+                $typeName = trim((string) ($row['type_name'] ?? $rate?->type_name ?? ''));
+                $keluasanMps = trim((string) ($row['keluasan_mps'] ?? ''));
+
+                if ($keluasanMps === '' && $rate) {
+                    $minArea = $rate->min_area !== null ? (float) $rate->min_area : null;
+                    $maxArea = $rate->max_area !== null ? (float) $rate->max_area : null;
+
+                    if ($minArea === null && $maxArea === null) {
+                        $keluasanMps = '-';
+                    } elseif ($maxArea === null) {
+                        $keluasanMps = number_format($minArea ?? 0, 2, '.', '').' ke atas';
+                    } else {
+                        $keluasanMps = number_format($minArea ?? 0, 2, '.', '').' - '.number_format($maxArea, 2, '.', '');
+                    }
+                }
+
+                $lockedApplication->additionalInfos()->create([
+                    'additional_activity_id' => $activity?->id ?? $activityId,
+                    'additional_activity_rate_id' => $rate?->id ?? $rateId,
+                    'activity_name' => $activityName !== '' ? $activityName : null,
+                    'type_name' => $typeName !== '' ? $typeName : null,
+                    'keluasan_mps' => $keluasanMps !== '' ? $keluasanMps : null,
+                    'amount' => $row['amount'] ?? $rate?->amount ?? null,
+                ]);
+            }
+
+            foreach ($documents as $index => $doc) {
+                $file = $request->file("documents.$index.file");
+                if (! $file) {
+                    continue;
+                }
+
+                $path = $file->store('license_documents');
+
+                $lockedApplication->documents()->updateOrCreate(
+                    ['document_type' => $doc['document_type'] ?? null],
+                    [
+                        'file_path' => $path,
+                        'upload_at' => now(),
+                    ]
+                );
+            }
+
+            if ($processFeePayment) {
+                $lockedProcessFeePayment = LicenseProcessFeePayment::query()
+                    ->whereKey($processFeePayment->id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (! $lockedProcessFeePayment || $lockedProcessFeePayment->payment_status !== 'Berjaya' || $lockedProcessFeePayment->consumed_at) {
+                    throw ValidationException::withMessages([
+                        'processing_fee' => 'Bayaran fi proses tidak sah atau telah digunakan.',
+                    ]);
+                }
+
+                $lockedProcessFeePayment->update([
+                    'license_application_id' => $lockedApplication->id,
+                    'consumed_at' => now(),
+                ]);
+            }
+        });
+
+        return redirect()->route('license.status')->with('success', 'Permohonan berjaya dikemas kini dan dihantar semula.');
     }
 
     protected function issueLicenseForHotel(Hotel $hotel, $startDate = null): void
@@ -1708,7 +2093,7 @@ class LicenseApplicationController extends Controller
             ->with('district:id,district_name')
             ->whereIn('role', [
                 'pbt_clerk',
-                'pbt_admin',
+                'pbt_clerk',
                 'pbt_license_officer',
                 'pbt_site_visit_officer',
                 'bkt_officer',

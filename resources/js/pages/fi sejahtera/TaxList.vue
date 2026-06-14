@@ -178,7 +178,7 @@ function canApproveSubmission(submission: TaxSubmissionRow) {
 		return false;
 	}
 
-	if (approverRole.value === 'pbt_admin') {
+	if (approverRole.value === 'pbt_clerk') {
 		return submission.status === 'submitted_to_pbt' || submission.status === 'rejected';
 	}
 
@@ -194,7 +194,7 @@ function canRejectSubmission(submission: TaxSubmissionRow) {
 		return false;
 	}
 
-	if (approverRole.value === 'pbt_admin') {
+	if (approverRole.value === 'pbt_clerk') {
 		return submission.status === 'submitted_to_pbt' || submission.status === 'rejected';
 	}
 

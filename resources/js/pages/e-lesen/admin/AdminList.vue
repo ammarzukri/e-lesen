@@ -33,7 +33,7 @@ const districtId = ref<number | null>(null);
 
 const formatRole = (value: string) => {
     const role: Record<string, string> = {
-        pbt_admin: 'Admin PBT',
+        pbt_clerk: 'Admin PBT',
         bkt_admin: 'Admin BKT',
         bendahara_admin: 'Admin Perbendaharaan',
         super_admin: 'Super Admin',
@@ -43,7 +43,7 @@ const formatRole = (value: string) => {
 }
 
 const rolesWithDistrict = [
-    'pbt_admin',
+    'pbt_clerk',
     'pbt_clerk',
     'pbt_license_officer',
     'pbt_site_visit_officer',
@@ -424,7 +424,7 @@ watch(() => props.admins, (v) => {
                         v-model="editRole"
                         class="w-full border p-2 rounded-lg"
                     >
-                        <option value="pbt_admin">Admin PBT</option>
+                        <option value="pbt_clerk">Admin PBT</option>
                         <option value="bkt_admin">Admin BKT</option>
                         <option value="bendahara_admin">Admin Perbendaharaan</option>
                         <option value="super_admin">Super Admin</option>

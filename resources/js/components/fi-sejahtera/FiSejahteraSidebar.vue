@@ -4,7 +4,7 @@ import { LayoutGrid, Banknote, Users, DollarSign, HandCoins, WalletCards, Settin
 
 const page = usePage();
 const role = page.props.auth?.user?.role;
-const isAdminRole = ['admin', 'bkt_admin', 'pbt_admin', 'bendahara_admin'].includes(role ?? '');
+const isAdminRole = ['admin', 'bkt_admin', 'pbt_clerk', 'bendahara_admin'].includes(role ?? '');
 const isSuperAdmin = role === 'super_admin';
 
 const navigationItems = isSuperAdmin

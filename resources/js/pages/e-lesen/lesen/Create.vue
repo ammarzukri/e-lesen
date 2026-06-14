@@ -26,6 +26,59 @@ interface ApplicantInfo {
   email: string
 }
 
+interface CompanyInfo {
+  name: string
+  ic: string
+  company_name: string
+  hotel_name: string
+  company_address: string
+  company_postcode: string
+  company_state: string
+  company_district: string
+  company_phone: string
+  company_registration_number: string
+  company_registration_date: string
+  company_registration_expiry_date: string
+  company_category: string
+  company_premises_location: string
+  license_type_selected: string
+  room_count: string
+  employee_malay: string
+  employee_chinese: string
+  employee_indian: string
+  employee_others: string
+  company_operation_start: string
+  company_operation_end: string
+  company_address_hq: string
+  company_postcode_hq: string
+  company_state_hq: string
+  company_district_hq: string
+  company_phone_hq: string
+  company_license_type: string
+  company_license_i: string
+  company_license_ii: string
+  company_license_iii: string
+}
+
+interface ResubmissionApplication {
+  id: number
+  district_id: number | null
+  status?: string | null
+  remarks?: string | null
+  payment_status?: string | null
+  payment_amount?: number | null
+  payment_billcode?: string | null
+  payment_paid_at?: string | null
+  applicant_info: Partial<ApplicantInfo>
+  company_info: Partial<CompanyInfo>
+  advertisment_info: {
+    address?: string
+    selected_activity_ids: number[]
+    activity_rows: Record<number, Array<{ type_name: string; rate_id: number | null }>>
+  }
+  document_names: string[]
+}
+
 const props = defineProps<{
   currentUserId?: number | null
   currentUserDistrictId?: number | null
@@ -41,6 +94,8 @@ const props = defineProps<{
     bill_code?: string | null
     paid_at?: string | null
   } | null
+  resubmissionApplication?: ResubmissionApplication | null
+  submitUrl?: string
 }>()
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -68,15 +123,23 @@ const rawProcessingFeeAmount = Number(props.processFeePayment?.amount ?? 10000)
 const processingFeeAmountInCents = rawProcessingFeeAmount > 1000 ? rawProcessingFeeAmount : rawProcessingFeeAmount * 100
 const processingFeeAmount = processingFeeAmountInCents / 100
 const formattedProcessingFeeAmount = computed(() => processingFeeAmount.toFixed(2))
-const processFeeStatus = ref<string>(props.processFeePayment?.status ?? (props.processFeePayment?.paid ? 'paid' : 'unpaid'))
-const processFeeBillCode = ref<string>(props.processFeePayment?.bill_code ?? '')
+const processFeeStatus = ref<string>(props.resubmissionApplication?.payment_status === 'Berjaya'
+  ? 'paid'
+  : props.processFeePayment?.status ?? (props.processFeePayment?.paid ? 'paid' : 'unpaid'))
+const processFeeBillCode = ref<string>(props.resubmissionApplication?.payment_billcode ?? props.processFeePayment?.bill_code ?? '')
 const isProcessFeeLoading = ref(false)
 const processFeeStatusMessage = ref('')
 let processFeeStatusInterval: ReturnType<typeof setInterval> | null = null
 let draftAutosaveTimeout: ReturnType<typeof setTimeout> | null = null
 const LEGACY_LICENSE_APPLICATION_DRAFT_KEY = 'license-application-create-draft-v1'
+const isResubmission = computed(() => Boolean(props.resubmissionApplication))
+const submitUrl = computed(() => props.submitUrl ?? licenseApply().url)
 
 const currentUserDraftKey = computed(() => {
+  if (props.resubmissionApplication) {
+    return `license-application-edit-draft-v1-${props.resubmissionApplication.id}`
+  }
+
   const userId = props.currentUserId
   return userId ? `license-application-create-draft-v1-user-${userId}` : LEGACY_LICENSE_APPLICATION_DRAFT_KEY
 })
@@ -299,88 +362,88 @@ const districtMap: Record<string, string[]> = {
 
 
 const form = ref({
-  district_id: props.currentUserDistrictId ?? null,
+  district_id: props.resubmissionApplication?.district_id ?? props.currentUserDistrictId ?? null,
   applicant_info: {
-    name: '',
-    ic_no: '',
-    birth_date: '',
-    birth_place: '',
-    gender: '',
-    ethnicity: '',
-    religion: '',
-    citizenship: '',
-    marital_status: '',
-    occupation: '',
-    income: '',
-    home_address: '',
-    postcode: '',
-    state: '',
-    district: '',
-    phone_number: '',
-    email: '',
+    name: props.resubmissionApplication?.applicant_info.name ?? '',
+    ic_no: props.resubmissionApplication?.applicant_info.ic_no ?? '',
+    birth_date: props.resubmissionApplication?.applicant_info.birth_date ?? '',
+    birth_place: props.resubmissionApplication?.applicant_info.birth_place ?? '',
+    gender: props.resubmissionApplication?.applicant_info.gender ?? '',
+    ethnicity: props.resubmissionApplication?.applicant_info.ethnicity ?? '',
+    religion: props.resubmissionApplication?.applicant_info.religion ?? '',
+    citizenship: props.resubmissionApplication?.applicant_info.citizenship ?? '',
+    marital_status: props.resubmissionApplication?.applicant_info.marital_status ?? '',
+    occupation: props.resubmissionApplication?.applicant_info.occupation ?? '',
+    income: props.resubmissionApplication?.applicant_info.income ?? '',
+    home_address: props.resubmissionApplication?.applicant_info.home_address ?? '',
+    postcode: props.resubmissionApplication?.applicant_info.postcode ?? '',
+    state: props.resubmissionApplication?.applicant_info.state ?? '',
+    district: props.resubmissionApplication?.applicant_info.district ?? '',
+    phone_number: props.resubmissionApplication?.applicant_info.phone_number ?? '',
+    email: props.resubmissionApplication?.applicant_info.email ?? '',
   },
   company_info: {
-    name: '',
-    ic: '',
-    company_name: '',
-    hotel_name: '',
-    company_address: '',
-    company_postcode: '',
-    company_state: 'Terengganu',
-    company_district: '',
-    company_phone: '',
-    company_registration_number: '',
-    company_registration_date: '',
-    company_registration_expiry_date: '',
-    company_category: '',
-    company_premises_location: '',
-    license_type_selected: '',
-    room_count: '',
-    employee_malay: '',
-    employee_chinese: '',
-    employee_indian: '',
-    employee_others: '',
-    company_operation_start: '',
-    company_operation_end: '',
-    company_address_hq: '',
-    company_postcode_hq: '',
-    company_state_hq: '',
-    company_district_hq: '',
-    company_phone_hq: '',
-    company_license_type: '',
-    company_license_i: '',
-    company_license_ii: '',
-    company_license_iii: '',
+    name: props.resubmissionApplication?.company_info.name ?? '',
+    ic: props.resubmissionApplication?.company_info.ic ?? '',
+    company_name: props.resubmissionApplication?.company_info.company_name ?? '',
+    hotel_name: props.resubmissionApplication?.company_info.hotel_name ?? '',
+    company_address: props.resubmissionApplication?.company_info.company_address ?? '',
+    company_postcode: props.resubmissionApplication?.company_info.company_postcode ?? '',
+    company_state: props.resubmissionApplication?.company_info.company_state ?? 'Terengganu',
+    company_district: props.resubmissionApplication?.company_info.company_district ?? '',
+    company_phone: props.resubmissionApplication?.company_info.company_phone ?? '',
+    company_registration_number: props.resubmissionApplication?.company_info.company_registration_number ?? '',
+    company_registration_date: props.resubmissionApplication?.company_info.company_registration_date ?? '',
+    company_registration_expiry_date: props.resubmissionApplication?.company_info.company_registration_expiry_date ?? '',
+    company_category: props.resubmissionApplication?.company_info.company_category ?? '',
+    company_premises_location: props.resubmissionApplication?.company_info.company_premises_location ?? '',
+    license_type_selected: props.resubmissionApplication?.company_info.license_type_selected ?? '',
+    room_count: props.resubmissionApplication?.company_info.room_count ?? '',
+    employee_malay: props.resubmissionApplication?.company_info.employee_malay ?? '',
+    employee_chinese: props.resubmissionApplication?.company_info.employee_chinese ?? '',
+    employee_indian: props.resubmissionApplication?.company_info.employee_indian ?? '',
+    employee_others: props.resubmissionApplication?.company_info.employee_others ?? '',
+    company_operation_start: props.resubmissionApplication?.company_info.company_operation_start ?? '',
+    company_operation_end: props.resubmissionApplication?.company_info.company_operation_end ?? '',
+    company_address_hq: props.resubmissionApplication?.company_info.company_address_hq ?? '',
+    company_postcode_hq: props.resubmissionApplication?.company_info.company_postcode_hq ?? '',
+    company_state_hq: props.resubmissionApplication?.company_info.company_state_hq ?? '',
+    company_district_hq: props.resubmissionApplication?.company_info.company_district_hq ?? '',
+    company_phone_hq: props.resubmissionApplication?.company_info.company_phone_hq ?? '',
+    company_license_type: props.resubmissionApplication?.company_info.company_license_type ?? '',
+    company_license_i: props.resubmissionApplication?.company_info.company_license_i ?? '',
+    company_license_ii: props.resubmissionApplication?.company_info.company_license_ii ?? '',
+    company_license_iii: props.resubmissionApplication?.company_info.company_license_iii ?? '',
   },
   advertisment_info: {
-    address: '',
-    selected_activity_ids: [] as number[],
-    activity_rows: {} as Record<number, AdditionalActivityRow[]>,
+    address: props.resubmissionApplication?.advertisment_info.address ?? '',
+    selected_activity_ids: props.resubmissionApplication?.advertisment_info.selected_activity_ids ?? ([] as number[]),
+    activity_rows: props.resubmissionApplication?.advertisment_info.activity_rows ?? ({} as Record<number, AdditionalActivityRow[]>),
   },
   declaration: {
     agree: false,
   },
-  processing_fee_paid: Boolean(props.processFeePayment?.paid),
+  processing_fee_paid: Boolean(props.processFeePayment?.paid ?? props.resubmissionApplication?.payment_status === 'Berjaya'),
   document1File: null as File | null,
-  document1Name: '',
+  document1Name: props.resubmissionApplication?.document_names?.[0] ?? '',
   document2File: null as File | null,
-  document2Name: '',
+  document2Name: props.resubmissionApplication?.document_names?.[1] ?? '',
   document3File: null as File | null,
-  document3Name: '',
+  document3Name: props.resubmissionApplication?.document_names?.[2] ?? '',
   document4File: null as File | null,
-  document4Name: '',
+  document4Name: props.resubmissionApplication?.document_names?.[3] ?? '',
   document5File: null as File | null,
-  document5Name: '',
+  document5Name: props.resubmissionApplication?.document_names?.[4] ?? '',
   document6File: null as File | null,
-  document6Name: '',
+  document6Name: props.resubmissionApplication?.document_names?.[5] ?? '',
   document7File: null as File | null,
-  document7Name: '',
+  document7Name: props.resubmissionApplication?.document_names?.[6] ?? '',
   document8File: null as File | null,
-  document8Name: '',
+  document8Name: props.resubmissionApplication?.document_names?.[7] ?? '',
   document9File: null as File | null,
-  document9Name: '',
+  document9Name: props.resubmissionApplication?.document_names?.[8] ?? '',
   document10File: null as File | null,
-  document10Name: '',
+  document10Name: props.resubmissionApplication?.document_names?.[9] ?? '',
 })
 
 const knownReligionOptions = ['Islam', 'Buddha', 'Hindu', 'Kristian']
@@ -389,7 +452,7 @@ const knownEthnicityOptions = ['Melayu', 'Cina', 'India']
 const isHydratingApplicantInfo = ref(true)
 
 function hydrateApplicantInfoFromDatabase() {
-  const initial = props.initialApplicantInfo ?? {}
+  const initial = props.resubmissionApplication?.applicant_info ?? props.initialApplicantInfo ?? {}
 
   Object.assign(form.value.applicant_info, {
     ...form.value.applicant_info,
@@ -413,7 +476,34 @@ function hydrateApplicantInfoFromDatabase() {
   })
 }
 
+function hydrateResubmissionApplication() {
+  const resubmissionApplication = props.resubmissionApplication
+
+  if (!resubmissionApplication) {
+    return
+  }
+
+  Object.assign(form.value.company_info, {
+    ...form.value.company_info,
+    ...resubmissionApplication.company_info,
+  })
+
+  Object.assign(form.value.advertisment_info, {
+    ...form.value.advertisment_info,
+    ...resubmissionApplication.advertisment_info,
+  })
+
+  form.value.district_id = resubmissionApplication.district_id
+  form.value.processing_fee_paid = Boolean(resubmissionApplication.payment_status === 'Berjaya')
+
+  if (resubmissionApplication.payment_status === 'Berjaya') {
+    processFeeStatus.value = 'paid'
+    processFeeBillCode.value = resubmissionApplication.payment_billcode ?? processFeeBillCode.value
+  }
+}
+
 hydrateApplicantInfoFromDatabase()
+hydrateResubmissionApplication()
 
 const religionSelection = ref('')
 const customReligion = ref('')
@@ -532,6 +622,7 @@ function persistFormDraft() {
       form: createFormDraftSnapshot(),
       processFeeStatus: processFeeStatus.value,
       processFeeBillCode: processFeeBillCode.value,
+      resubmissionApplicationId: props.resubmissionApplication?.id ?? null,
       updatedAt: new Date().toISOString(),
     }
 
@@ -542,6 +633,10 @@ function persistFormDraft() {
 }
 
 function restoreFormDraft() {
+  if (isResubmission.value) {
+    return
+  }
+
   try {
     const raw = localStorage.getItem(currentUserDraftKey.value)
     if (!raw) return
@@ -1044,7 +1139,7 @@ function submitForm() {
     documents,
   }
 
-  router.post(licenseApply().url, payload, {
+  router.post(submitUrl.value, payload, {
     forceFormData: true,
     preserveScroll: true,
     onStart: () => {
@@ -1059,7 +1154,9 @@ function submitForm() {
     },
     onSuccess: () => {
       clearFormDraft()
-      submitSuccess.value = 'Permohonan berjaya dihantar.'
+      submitSuccess.value = isResubmission.value
+        ? 'Permohonan berjaya dikemas kini dan dihantar semula.'
+        : 'Permohonan berjaya dihantar.'
       if (redirectTimeout) clearTimeout(redirectTimeout)
       redirectTimeout = setTimeout(() => {
         router.visit(dashboard().url)
@@ -2173,7 +2270,12 @@ function getPbtCardClass(index: number) {
               <div class="text-sm text-slate-600 dark:text-slate-300">Jumlah perlu dibayar</div>
               <div class="text-3xl font-bold text-slate-900 dark:text-slate-100">RM{{ formattedProcessingFeeAmount }}</div>
               <div class="mt-2 text-sm text-slate-600 dark:text-slate-300">
-                Permohonan hanya boleh dihantar selepas Bayaran Fi Proses telah dibayar.
+                <template v-if="isResubmission && form.processing_fee_paid">
+                  Permohonan ini sedang dikemas kini dan fi proses asal akan dikekalkan.
+                </template>
+                <template v-else>
+                  Permohonan hanya boleh dihantar selepas Bayaran Fi Proses telah dibayar.
+                </template>
               </div>
             </div>
 
@@ -2564,14 +2666,19 @@ function getPbtCardClass(index: number) {
               :disabled="!form.declaration.agree || !form.processing_fee_paid || isSubmitting"
               class="px-4 py-2 bg-black text-white rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed dark:bg-slate-100 dark:text-slate-900"
             >
-              {{ isSubmitting ? 'Sedang dihantar...' : 'Hantar Permohonan' }}
+              {{ isSubmitting ? 'Sedang dihantar...' : isResubmission ? 'Hantar Semula Permohonan' : 'Hantar Permohonan' }}
             </button>
 
             <p
               v-if="!form.processing_fee_paid"
               class="text-sm text-amber-700 dark:text-amber-300"
             >
-              Sila buat bayaran fi proses RM{{ formattedProcessingFeeAmount }} pada langkah "Bayaran Fi Proses" terlebih dahulu.
+              <template v-if="isResubmission">
+                Bayaran fi proses asal belum disahkan. Sila lengkapkan bayaran yang sah sebelum menghantar semula.
+              </template>
+              <template v-else>
+                Sila buat bayaran fi proses RM{{ formattedProcessingFeeAmount }} pada langkah "Bayaran Fi Proses" terlebih dahulu.
+              </template>
             </p>
           </div>
         </div>

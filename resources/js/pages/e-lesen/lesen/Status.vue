@@ -105,7 +105,7 @@ function getStatusClass(status?: string): string {
 		return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
 	}
 
-	if (status === 'Tamat Tempoh' || status === 'Ditolak') {
+	if (status === 'Tamat Tempoh' || status === 'Ditolak' || status === 'Tidak Lengkap') {
 		return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
 	}
 
@@ -261,15 +261,39 @@ function formatDate(dateString?: string): string {
 									</div>
 								</div>
 
-								<section v-if="application.status === 'Ditolak'">
+								<section v-if="application.status === 'Tidak Lengkap'">
 									<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
-										Ulasan Penolakan
+										Ulasan Kerani PBT
 									</h3>
 
 									<div class="rounded-xl border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-3">
 										<div class="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap">
 											{{ application.remarks || '-' }}
 										</div>
+									</div>
+								</section>
+
+								<section v-if="!isStaff && application.status === 'Tidak Lengkap'">
+									<h3 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
+										Tindakan Pembetulan
+									</h3>
+
+									<div class="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 p-4 space-y-3">
+										<p class="text-sm text-slate-900 dark:text-slate-100">
+											Permohonan ini telah dikembalikan untuk kemas kini. Sila betulkan maklumat yang diminta dan hantar semula.
+										</p>
+										<Link
+											:href="`/license/apply?resubmit_application_id=${application.id}`"
+											class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
+										>
+											Kemaskini Permohonan
+										</Link>
+										<p
+											v-if="getPaymentStatus(application) === 'Berjaya'"
+											class="text-xs text-slate-600 dark:text-slate-400"
+										>
+											Fi proses yang telah dibayar akan dikekalkan. Anda tidak perlu membuat bayaran semula.
+										</p>
 									</div>
 								</section>
 

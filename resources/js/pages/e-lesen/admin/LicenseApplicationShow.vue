@@ -930,45 +930,47 @@ function submitReject() {
                         <h3
                             class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4"
                         >
-                            Jenis Lesen Yang Dipohon
+                            Maklumat Tambahan
                         </h3>
-                        <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                <div>
-                                    <div
-                                        class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                    >
-                                        Kategori Lesen
+                        <div class="space-y-3">
+                            <h3
+                                class="text-md font-semibold text-slate-900 dark:text-slate-100 mb-4"
+                            >
+                                Jenis Lesen Yang Dipohon
+                            </h3>
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div>
+                                        <div
+                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                        >
+                                            Kategori Lesen
+                                        </div>
+                                        <div
+                                            class="text-md text-slate-900 dark:text-slate-100"
+                                        >
+                                            {{ formatLicenseType(application.license_type_selected || application.license_types?.[0]?.aktiviti) }}
+                                        </div>
                                     </div>
-                                    <div
-                                        class="text-md text-slate-900 dark:text-slate-100"
-                                    >
-                                        {{ formatLicenseType(application.license_type_selected || application.license_types?.[0]?.aktiviti) }}
-                                    </div>
-                                </div>
-                                <div>
-                                    <div
-                                        class="text-sm font-semibold text-slate-600 dark:text-slate-400"
-                                    >
-                                        Bilangan Bilik
-                                    </div>
-                                    <div
-                                        class="text-md text-slate-900 dark:text-slate-100"
-                                    >
-                                        {{ application.room_count || application.license_types?.[0]?.unit_bilik || '-' }}
+                                    <div>
+                                        <div
+                                            class="text-sm font-semibold text-slate-600 dark:text-slate-400"
+                                        >
+                                            Bilangan Bilik
+                                        </div>
+                                        <div
+                                            class="text-md text-slate-900 dark:text-slate-100"
+                                        >
+                                            {{ application.room_count || application.license_types?.[0]?.unit_bilik || '-' }}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    </section>
-
-                    <section>
-                        <h3
-                            class="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4"
-                        >
-                            Maklumat Tambahan (Aktiviti)
-                        </h3>
-                        <div class="space-y-3">
+                            <h3
+                                class="text-md font-semibold text-slate-900 dark:text-slate-100 mb-4"
+                            >
+                                Aktiviti Tambahan
+                            </h3>
                             <div
                                 v-for="(item, idx) in application.additional_infos || []"
                                 :key="`ad-${idx}`"
@@ -1198,14 +1200,14 @@ function submitReject() {
                         class="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700"
                         @click="approve"
                     >
-                        Lulus
+                        Terima
                     </button>
                     <button
                         type="button"
                         class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
                         @click="reject"
                     >
-                        Tolak
+                        Tidak Lengkap
                     </button>
                 </div>
             </div>
@@ -1220,10 +1222,10 @@ function submitReject() {
         <div class="w-full max-w-lg rounded-xl bg-white dark:bg-slate-900 p-4">
             <div class="mb-3">
                 <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
-                    Sebab Penolakan Permohonan
+                    Sebab Permohonan Tidak Lengkap
                 </h3>
                 <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-                    Sila berikan ulasan sebelum menolak permohonan ini.
+                    Sila berikan ulasan sebelum menghantar kembali permohonan ini kepada pemohon.
                 </p>
             </div>
 
@@ -1237,7 +1239,7 @@ function submitReject() {
                 v-if="!rejectRemarks.trim()"
                 class="mt-2 text-xs text-red-600 dark:text-red-400"
             >
-                Sila isi sebab penolakan.
+                Sila isi sebab permohonan tidak lengkap.
             </p>
 
             <div class="mt-4 flex items-center justify-end gap-2">
@@ -1254,7 +1256,7 @@ function submitReject() {
                     :disabled="!rejectRemarks.trim()"
                     @click="submitReject"
                 >
-                    Tolak Permohonan
+                    Hantar Kembali
                 </button>
             </div>
         </div>

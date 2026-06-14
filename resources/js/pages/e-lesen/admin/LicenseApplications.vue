@@ -36,8 +36,8 @@ const allApplications = computed(() => props.applications ?? []);
 const canApprove = computed<boolean>(() => Boolean(props.permissions?.canApprove));
 const canReject = computed<boolean>(() => Boolean(props.permissions?.canReject));
 const canBlock = computed<boolean>(() => Boolean(props.permissions?.canBlock));
-const canViewDetails = computed<boolean>(() => ['admin', 'bkt_admin', 'pbt_admin', 'bendahara_admin'].includes(page.props.auth?.user?.role ?? ''));
-const isPbtAdmin = computed<boolean>(() => page.props.auth?.user?.role === 'pbt_admin');
+const canViewDetails = computed<boolean>(() => ['admin', 'bkt_admin', 'pbt_clerk', 'bendahara_admin'].includes(page.props.auth?.user?.role ?? ''));
+const isPbtClerk = computed<boolean>(() => page.props.auth?.user?.role === 'pbt_clerk');
 const isBktAdmin = computed<boolean>(() => ['admin', 'bkt_admin'].includes(page.props.auth?.user?.role ?? ''));
 
 const selectedHotelName = ref<string>('');
@@ -599,7 +599,7 @@ onBeforeUnmount(() => {
                                             ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
                                             : application.status === 'Disekat'
                                                 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
-                                            : application.status === 'Ditolak'
+                                            : application.status === 'Ditolak' || application.status === 'Tidak Lengkap'
                                                 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
                                                 : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100'"
                                     >
@@ -652,39 +652,29 @@ onBeforeUnmount(() => {
                                     class="border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
                                 >
                                     <div class="flex flex-wrap gap-2">
-                                        <button
-                                            v-if="isPbtAdmin && canApprove && application.status !== 'Diluluskan'"
-                                            type="button"
-                                            class="px-3 py-1 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
-                                            @click="approve(application.id)"
-                                        >
-                                            Lulus
-                                        </button>
-                                        <button
-                                            v-if="isBktAdmin && canApprove && application.license_status === 'Disekat'"
-                                            type="button"
-                                            class="px-3 py-1 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
-                                            @click="approve(application.id)"
-                                        >
-                                            Lulus
-                                        </button>
-                                        <button
-                                            v-if="isBktAdmin && canBlock && !!application.license_status && application.license_status !== 'Disekat' && application.status !== 'Ditolak' && application.fi_sejahtera_status === 'Belum Dibayar'"
-                                            type="button"
-                                            class="px-3 py-1 rounded-lg bg-orange-500 text-white text-xs font-semibold hover:bg-orange-600"
-                                            @click="block(application.id)"
-                                        >
-                                            Sekat
-                                        </button>
-                                        <button
-                                            v-if="isPbtAdmin && canReject && application.status !== 'Disekat' && application.payment_status !== 'Berjaya'"
-                                            type="button"
-                                            class="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
-                                            :disabled="application.status === 'Ditolak'"
-                                            @click="reject(application.id)"
-                                        >
-                                            Tolak
-                                        </button>
+
+                                        <template v-if="application.status === 'Dalam Proses'">
+
+                                            <button
+                                                v-if="isPbtClerk && canApprove"
+                                                type="button"
+                                                class="px-3 py-1 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700"
+                                                @click="approve(application.id)"
+                                            >
+                                                Terima
+                                            </button>
+
+                                            <button
+                                                v-if="isPbtClerk && canReject && application.payment_status !== 'Berjaya'"
+                                                type="button"
+                                                class="px-3 py-1 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
+                                                @click="reject(application.id)"
+                                            >
+                                                Tidak Lengkap
+                                            </button>
+
+                                        </template>
+
                                         <Link
                                             v-if="canViewDetails"
                                             class="px-3 py-1 rounded-lg bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800"
@@ -692,6 +682,7 @@ onBeforeUnmount(() => {
                                         >
                                             Lihat
                                         </Link>
+
                                     </div>
                                 </td>
                             </tr>

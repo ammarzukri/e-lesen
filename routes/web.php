@@ -30,7 +30,7 @@ Route::get('/countries', [CountryController::class, 'index'])
 Route::get('dashboard', function () {
     $user = auth()->user();
     $isBktAdmin = $user && in_array($user->role, ['admin', 'bkt_admin', 'bendahara_admin', 'super_admin'], true);
-    $isPbtAdmin = $user && $user->role === 'pbt_admin';
+    $isPbtAdmin = $user && $user->role === 'pbt_clerk';
 
     if ($isBktAdmin || $isPbtAdmin) {
         $applicationsQuery = LicenseApplication::query()->with('pbtDistrict');
@@ -39,7 +39,7 @@ Route::get('dashboard', function () {
             $pbtDistrictId = $user?->district_id;
 
             if (! $pbtDistrictId) {
-                abort(403, 'Akaun pbt_admin tidak mempunyai PBT yang ditetapkan.');
+                abort(403, 'Akaun pbt_clerk tidak mempunyai PBT yang ditetapkan.');
             }
 
             $applicationsQuery->where('district_id', $pbtDistrictId);
@@ -332,6 +332,10 @@ Route::get('/license/status', [LicenseApplicationController::class, 'status'])
 Route::post('/license/apply', [LicenseApplicationController::class, 'store'])
     ->middleware(['auth'])
     ->name('license.apply.store');
+
+Route::post('/license/apply/{application}/resubmit', [LicenseApplicationController::class, 'resubmit'])
+    ->middleware(['auth'])
+    ->name('license.apply.resubmit');
 
 Route::patch('/license/applicant-info', [LicenseApplicationController::class, 'updateApplicantInfo'])
     ->middleware(['auth'])

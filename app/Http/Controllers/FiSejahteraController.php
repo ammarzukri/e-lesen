@@ -459,7 +459,7 @@ class FiSejahteraController extends Controller
 
     protected function isPbtAdmin(?User $user = null): bool
     {
-        return ($user ?? auth()->user())?->role === 'pbt_admin';
+        return ($user ?? auth()->user())?->role === 'pbt_clerk';
     }
 
     protected function isBendaharaAdmin(?User $user = null): bool
@@ -477,7 +477,7 @@ class FiSejahteraController extends Controller
         $user ??= auth()->user();
 
         if ($this->isPbtAdmin($user) && !$user?->district_id) {
-            abort(403, 'Akaun pbt_admin tidak mempunyai PBT yang ditetapkan.');
+            abort(403, 'Akaun pbt_clerk tidak mempunyai PBT yang ditetapkan.');
         }
     }
 
@@ -1523,7 +1523,7 @@ class FiSejahteraController extends Controller
                 ? 'bendahara_admin'
                 : ($this->isBktAdmin($user)
                     ? 'bkt_admin'
-                    : ($this->isPbtAdmin($user) ? 'pbt_admin' : null)),
+                    : ($this->isPbtAdmin($user) ? 'pbt_clerk' : null)),
         ]);
     }
 
